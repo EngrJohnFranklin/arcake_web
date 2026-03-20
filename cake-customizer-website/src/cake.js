@@ -191,13 +191,14 @@ export class CakeScene {
     // Build plate
     this._buildPlate(scale, boardColorHex);
 
-    // Build toppings
+    // Build toppings — pass hasText so they avoid the centre text zone
+    const hasText = !!(state.cakeText && state.cakeText.trim());
     if (state.toppings && state.toppings.length > 0) {
-      this._buildToppings(state.toppings, state.shape, scale);
+      this._buildToppings(state.toppings, state.shape, scale, hasText);
     }
 
-    // Build text
-    if (state.cakeText && state.cakeText.trim()) {
+    // Build text (always on top)
+    if (hasText) {
       this._buildText(state.cakeText, state.textColor, state.textFont, state.shape, scale);
     }
   }
@@ -453,258 +454,591 @@ export class CakeScene {
    * @param {string} shape - Cake shape
    * @param {number} s - Scale
    */
-  _buildToppings(toppings, shape, s) {
-    const topY = this._cakeTopY || 0.9 * s;
-    const r = (this._cakeRadius || 1.0 * s) * 0.7;
+  /**
+   * Build 3D toppings on top of cake — shape and size aware.
+   * Passes a rich context object to every topping builder so each can
+   * select the correct position generator and scale geometry to match.
+   */
+  _buildToppings(toppings, shape, s, hasText = false) {
+    const topY    = this._cakeTopY    || 0.9 * s;
+    const usableR = (this._cakeRadius || 1.0 * s) * 0.82;
+    // For square cakes the usable half-side is slightly smaller than usableR
+    const halfW   = (shape === 'square') ? s * 0.88 : usableR;
+    // Centre exclusion zone when text is present
+    const minR    = hasText ? usableR * 0.46 : 0;
+    const ctx     = { topY, usableR, halfW, minR, shape, s };
 
-    toppings.forEach((topping, idx) => {
-      const angle = (idx / toppings.length) * Math.PI * 2 + 0.3;
-      const dist = r * (0.3 + Math.random() * 0.6);
-      const px = Math.cos(angle) * dist;
-      const pz = Math.sin(angle) * dist;
-
+    toppings.forEach((topping) => {
       switch (topping) {
-        case 'strawberries':
-          this._addStrawberry(px, topY, pz);
-          break;
-        case 'blueberries':
-          this._addBlueberry(px, topY, pz);
-          break;
-        case 'candles':
-          this._addCandle(px, topY, pz);
-          break;
-        case 'sprinkles':
-          this._addSprinkles(topY, r);
-          break;
-        case 'chocolate_drip':
-          // Already handled by frosting style drip; add extra drizzle
-          this._addChocDrizzle(topY, r);
-          break;
-        case 'flowers':
-          this._addFlower(px, topY, pz);
-          break;
-        case 'macarons':
-          this._addMacaron(px, topY, pz);
-          break;
-        case 'gold_dust':
-          this._addGoldDust(topY, r);
-          break;
-        case 'sugar_pearls':
-          this._addSugarPearls(topY, r);
-          break;
-        case 'fresh_fruit':
-          this._addFreshFruit(px, topY, pz);
-          break;
-        case 'ribbon':
-          this._addRibbon(s);
-          break;
-        case 'fondant_figures':
-          this._addFondantFigure(px, topY, pz);
-          break;
+        case 'strawberries':    this._addStrawberries(ctx);   break;
+        case 'blueberries':     this._addBlueberries(ctx);    break;
+        case 'candles':         this._addCandles(ctx);         break;
+        case 'sprinkles':       this._addSprinkles(ctx);       break;
+        case 'chocolate_drip':  this._addChocDrizzle(ctx);    break;
+        case 'flowers':         this._addFlowers(ctx);         break;
+        case 'macarons':        this._addMacarons(ctx);        break;
+        case 'gold_dust':       this._addGoldDust(ctx);        break;
+        case 'sugar_pearls':    this._addSugarPearls(ctx);     break;
+        case 'fresh_fruit':     this._addFreshFruits(ctx);     break;
+        case 'ribbon':          this._addRibbon(s, shape);     break;
+        case 'fondant_figures': this._addFondantFigures(ctx); break;
       }
     });
   }
 
-  /** Add a strawberry topping */
-  _addStrawberry(x, y, z) {
-    const berry = new THREE.Mesh(
-      new THREE.ConeGeometry(0.1, 0.18, 8),
-      new THREE.MeshPhongMaterial({ color: 0xE53935 })
-    );
-    berry.position.set(x, y + 0.09, z);
-    berry.rotation.x = Math.PI;
-    // small leaf
-    const leaf = new THREE.Mesh(
-      new THREE.ConeGeometry(0.06, 0.04, 4),
-      new THREE.MeshPhongMaterial({ color: 0x2E7D32 })
-    );
-    leaf.position.set(x, y + 0.18, z);
-    this.toppingsGroup.add(berry);
-    this.toppingsGroup.add(leaf);
+  // ─── Boundary helpers ────────────────────────────────────────────────────────
+
+  /**
+   * Validate if a position (x, z) is strictly within the cake's surface bounds.
+   * Includes margin to prevent edge overflow and clipping.
+   * @param {number} x - X coordinate
+   * @param {number} z - Z coordinate
+   * @param {object} ctx - Cake context (shape, usableR, halfW, minR)
+   * @param {number} margin - Safety margin from edges (default: 0.08)
+   * @returns {boolean} - True if position is valid
+   */
+  _validatePositionInBounds(x, z, ctx, margin = 0.08) {
+    const { shape, usableR, halfW, minR } = ctx;
+    const dist = Math.sqrt(x * x + z * z);
+
+    // Always respect text exclusion zone
+    if (dist < minR) return false;
+
+    if (shape === 'square') {
+      // Square: enforce margin from all edges
+      const safeW = halfW * (1 - margin);
+      return Math.abs(x) <= safeW && Math.abs(z) <= safeW;
+    }
+
+    if (shape === 'heart') {
+      // Heart: use mathematical curve boundary with margin
+      return this._isWithinHeartCurve(x, z, usableR * (1 - margin));
+    }
+
+    // Circular (round/layered): radius boundary with margin
+    return dist <= usableR * (1 - margin);
   }
 
-  /** Add a blueberry */
-  _addBlueberry(x, y, z) {
-    const b = new THREE.Mesh(
-      new THREE.SphereGeometry(0.06, 12, 12),
-      new THREE.MeshPhongMaterial({ color: 0x283593 })
-    );
-    b.position.set(x, y + 0.06, z);
-    this.toppingsGroup.add(b);
+  /**
+   * Check if a position is within the heart curve boundary.
+   * Uses the parameterized heart equation for strict containment.
+   * @param {number} x - X coordinate
+   * @param {number} z - Z coordinate
+   * @param {number} maxR - Maximum allowed radius for the heart
+   * @returns {boolean} - True if position is inside heart curve
+   */
+  _isWithinHeartCurve(x, z, maxR) {
+    // Heart equation: convert (x,z) to polar angle relative to curve
+    const dist = Math.sqrt(x * x + z * z);
+    if (dist === 0) return true;
+
+    let angle = Math.atan2(x, z); // angle in heart frame
+    if (angle < 0) angle += Math.PI * 2;
+
+    // Heart radial profile: widens at lobes (±90°), narrows at tip/cleft
+    const heartFactor = 0.62 + 0.24 * Math.cos(angle * 2 + Math.PI)
+                             - 0.08 * Math.abs(Math.sin(angle));
+    const heartRadius = maxR * Math.max(0.30, heartFactor);
+
+    // Position is inside if distance ≤ heart radius at that angle
+    // Account for Z depth compression
+    const depthAdjustedDist = Math.sqrt(x * x + (z / 0.70) * (z / 0.70));
+    return depthAdjustedDist <= heartRadius;
   }
 
-  /** Add a candle with flame */
-  _addCandle(x, y, z) {
-    const stick = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.03, 0.03, 0.35, 8),
-      new THREE.MeshPhongMaterial({ color: 0xF8BBD9 })
-    );
-    stick.position.set(x, y + 0.175, z);
-
-    const flame = new THREE.Mesh(
-      new THREE.SphereGeometry(0.04, 8, 8),
-      new THREE.MeshPhongMaterial({ color: 0xFFD54F, emissive: 0xFFAB00, emissiveIntensity: 0.8 })
-    );
-    flame.position.set(x, y + 0.38, z);
-    flame.scale.set(0.7, 1.2, 0.7);
-
-    this.toppingsGroup.add(stick);
-    this.toppingsGroup.add(flame);
+  /**
+   * Calculate auto-scale factor based on topping density.
+   * Reduces geometry size if toppings are crowded.
+   * @param {number} count - Number of toppings
+   * @param {number} availableArea - Available placement area
+   * @returns {number} - Scale multiplier (0.6 to 1.0)
+   */
+  _calculateGeometryScale(count, availableArea = 1.0) {
+    if (count <= 3) return 1.0;
+    if (count <= 6) return 0.95;
+    if (count <= 12) return 0.88;
+    if (count <= 25) return 0.76;
+    if (count <= 50) return 0.65;
+    return 0.60;
   }
 
-  /** Add scattered sprinkles */
-  _addSprinkles(topY, r) {
-    const colors = [0xFF4081, 0x448AFF, 0xFFD740, 0x69F0AE, 0xE040FB, 0xFF6E40];
-    for (let i = 0; i < 40; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * r;
+  // ─── Position helpers ────────────────────────────────────────────────────────
+
+  /** Even ring of count positions at fixed radius. */
+  _ringPositions(count, radius, startAngle = 0) {
+    return Array.from({ length: count }, (_, i) => {
+      const angle = startAngle + (i / count) * Math.PI * 2;
+      return { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius, angle };
+    });
+  }
+
+  /** Uniform random distance within a donut (minR..maxR). */
+  _donutDist(minR, maxR) {
+    return Math.sqrt(Math.random() * (maxR * maxR - minR * minR) + minR * minR);
+  }
+
+  /**
+   * Shape-aware position dispatcher — routes to the correct layout strategy.
+   * All returned positions are validated to stay within strict boundaries.
+   * @param {number}  count      - Number of positions needed
+   * @param {object}  ctx        - Cake context from _buildToppings
+   * @param {number}  outerFrac  - 0–1 radial fraction (ring-based shapes)
+   * @param {number}  startAngle - Ring start angle
+   */
+  _getPositions(count, ctx, outerFrac = 0.80, startAngle = 0) {
+    const { shape, usableR, halfW, minR } = ctx;
+    let positions = [];
+
+    if (shape === 'square') {
+      positions = this._squareGridPositions(count, halfW, minR);
+    } else if (shape === 'heart') {
+      positions = this._heartSurfacePositions(count, usableR, minR, outerFrac);
+    } else {
+      // round / layered → polar ring
+      const r = minR + (usableR - minR) * outerFrac;
+      positions = this._ringPositions(count, Math.max(r, minR + 0.01), startAngle);
+    }
+
+    // STRICT VALIDATION: reject any position outside boundaries
+    return positions.filter(({ x, z }) => this._validatePositionInBounds(x, z, ctx));
+  }
+
+  /**
+   * Grid-based positions for square cakes.
+   * Items fill a cols×rows grid within the safe inner square, skipping
+   * any cell that falls inside the text exclusion circle (minR).
+   * All returned positions are validated against boundaries.
+   */
+  _squareGridPositions(count, halfW, minR) {
+    const safe = halfW * 0.78; // 22% margin from edges for strict containment
+    if (count <= 1) return [{ x: 0, z: 0 }];
+
+    const cols = Math.ceil(Math.sqrt(count * 1.2));
+    const rows = Math.ceil(count / cols);
+    const positions = [];
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (positions.length >= count) break;
+        const x = cols <= 1 ? 0 : -safe + (2 * safe / (cols - 1)) * c;
+        const z = rows <= 1 ? 0 : -safe + (2 * safe / (rows - 1)) * r;
+        // Validate against exclusion zone AND edge bounds
+        if (Math.sqrt(x * x + z * z) >= minR && Math.abs(x) <= safe && Math.abs(z) <= safe) {
+          positions.push({ x, z });
+        }
+      }
+    }
+
+    // Fallback: symmetric perimeter placements
+    let perimeter = 0;
+    while (positions.length < count && perimeter < 12) {
+      const angle = (perimeter / 12) * Math.PI * 2;
+      const r = safe * 0.65;
+      const px = Math.cos(angle) * r;
+      const pz = Math.sin(angle) * r;
+      if (Math.sqrt(px * px + pz * pz) >= minR) positions.push({ x: px, z: pz });
+      perimeter++;
+    }
+    return positions.slice(0, count);
+  }
+
+  /**
+   * Heart-contour following positions.
+   * Uses a bilateral-symmetric polar parameterisation, with strict boundary
+   * validation to ensure NO overflow from the heart shape.
+   */
+  _heartSurfacePositions(count, usableR, minR, frac = 0.80) {
+    const hw = usableR * frac * 0.80; // Reduced from 0.86 for strict containment
+    const positions = [];
+
+    for (let i = 0; i < count; i++) {
+      const t  = (i + 0.5) / count;
+      const th = t * Math.PI * 2;
+
+      // Heart adapts radial distance per angle:
+      // wider at ±π/2 (left/right lobes), narrower at 0 (cleft) and π (tip)
+      const heartFactor = 0.62 + 0.24 * Math.cos(th * 2 + Math.PI)
+                               - 0.08 * Math.abs(Math.sin(th));
+      const r = hw * Math.max(0.32, heartFactor); // Increased floor from 0.30 to 0.32
+
+      const x = Math.sin(th) * r;
+      const z = Math.cos(th) * r * 0.70; // heart depth < width in XZ plane
+
+      // Validate: inside heart + outside exclusion zone
+      const dist = Math.sqrt(x * x + z * z);
+      if (dist >= minR && this._isWithinHeartCurve(x, z, hw * 0.95)) {
+        positions.push({ x, z });
+      }
+    }
+
+    // Fallback: symmetric inner positions
+    let fallback = 0;
+    while (positions.length < count && fallback < 8) {
+      const angle = (fallback / 8) * Math.PI * 2;
+      const r = hw * 0.45;
+      const px = Math.cos(angle) * r;
+      const pz = Math.sin(angle) * r * 0.70;
+      if (Math.sqrt(px * px + pz * pz) >= minR && this._isWithinHeartCurve(px, pz, hw * 0.95)) {
+        positions.push({ x: px, z: pz });
+      }
+      fallback++;
+    }
+    return positions.slice(0, count);
+  }
+
+  /**
+   * Uniform random scatter across the cake's valid surface area.
+   * Enforces strict boundary validation with rejection of overflow positions.
+   * Square → uniform in safe square. Others → uniform donut/disc.
+   */
+  _scatterPositions(count, ctx) {
+    const { shape, usableR, halfW, minR } = ctx;
+    const safe = shape === 'square' ? halfW * 0.78 : usableR * 0.92;
+    const positions = [];
+    let attempts = 0;
+    const maxAttempts = count * 50; // Allow more attempts for strict validation
+
+    while (positions.length < count && attempts < maxAttempts) {
+      attempts++;
+      let x, z;
+      let valid = false;
+
+      if (shape === 'square') {
+        x = (Math.random() * 2 - 1) * safe;
+        z = (Math.random() * 2 - 1) * safe;
+        // Strict bounds: must be inside safe square AND pass validation
+        valid = Math.abs(x) <= safe && Math.abs(z) <= safe && Math.sqrt(x * x + z * z) >= minR;
+      } else if (shape === 'heart') {
+        // For heart, generate points and validate against heart curve
+        let attempts2 = 0;
+        while (attempts2 < 10) {
+          attempts2++;
+          const rand = Math.sqrt(Math.random());
+          const angle = Math.random() * Math.PI * 2;
+          x = Math.cos(angle) * rand * safe;
+          z = Math.sin(angle) * rand * safe * 0.70;
+          if (Math.sqrt(x * x + z * z) >= minR && this._isWithinHeartCurve(x, z, safe * 0.95)) {
+            valid = true;
+            break;
+          }
+        }
+      } else {
+        // Circular: donut or disc distribution
+        const dist  = minR === 0
+          ? Math.sqrt(Math.random()) * safe
+          : this._donutDist(minR, safe);
+        const angle = Math.random() * Math.PI * 2;
+        x = Math.cos(angle) * dist;
+        z = Math.sin(angle) * dist;
+        valid = true;
+      }
+
+      if (valid && Math.sqrt(x * x + z * z) >= minR) {
+        positions.push({ x, z });
+      }
+    }
+
+    // Ensure minimum count: add centre positions as final fallback
+    while (positions.length < count) {
+      positions.push({ x: 0, z: 0 });
+    }
+    return positions.slice(0, count);
+  }
+
+  // ─── Topping builders (all accept ctx, geometry scales with s) ───────────────
+
+  /** 5 strawberries — ring/grid/heart depending on shape */
+  _addStrawberries(ctx) {
+    const { topY, s, usableR } = ctx;
+    const baseScale = s * 0.9;
+    const count = 5;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const mat     = new THREE.MeshPhongMaterial({ color: 0xE53935 });
+    const leafMat = new THREE.MeshPhongMaterial({ color: 0x2E7D32 });
+    this._getPositions(count, ctx, 0.82, Math.PI / 10).forEach(({ x, z }) => {
+      const berry = new THREE.Mesh(new THREE.ConeGeometry(0.09 * scale, 0.17 * scale, 8), mat);
+      berry.position.set(x, topY + 0.085 * scale, z);
+      berry.rotation.x = Math.PI;
+      const leaf  = new THREE.Mesh(new THREE.ConeGeometry(0.055 * scale, 0.05 * scale, 4), leafMat);
+      leaf.position.set(x, topY + 0.175 * scale, z);
+      this.toppingsGroup.add(berry, leaf);
+    });
+  }
+
+  /** Blueberries — outer ring + inner ring (inner omitted when text present) */
+  _addBlueberries(ctx) {
+    const { topY, s, usableR, minR, shape } = ctx;
+    const baseScale = s * 0.9;
+    const count = 6;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const mat = new THREE.MeshPhongMaterial({ color: 0x3949AB, shininess: 60 });
+    const geo = new THREE.SphereGeometry(0.052 * scale, 10, 10);
+    const outer = this._getPositions(count, ctx, 0.84);
+    // Inner ring: use ring for circular, skip for heart (no natural inner ring)
+    const inner = (minR === 0 && shape !== 'heart')
+      ? this._ringPositions(4, usableR * 0.35, Math.PI / 4).filter(({ x: px, z: pz }) => 
+          this._validatePositionInBounds(px, pz, ctx))
+      : [];
+    [...outer, ...inner].forEach(({ x, z }) => {
+      const b = new THREE.Mesh(geo, mat);
+      b.position.set(x, topY + 0.052 * scale, z);
+      this.toppingsGroup.add(b);
+    });
+  }
+
+  /** 6 candles — adapts ring/grid/heart, colour-coded */
+  _addCandles(ctx) {
+    const { topY, s, usableR } = ctx;
+    const baseScale = s * 0.9;
+    const count = 6;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const candleColors = [0xF8BBD9, 0xB3E5FC, 0xF0F4C3, 0xFFCCBC, 0xE1BEE7, 0xC8E6C9];
+    const flameMat = new THREE.MeshPhongMaterial({ color: 0xFFD54F, emissive: 0xFFAB00, emissiveIntensity: 0.9 });
+    this._getPositions(count, ctx, 0.80, Math.PI / 12).forEach(({ x, z }, i) => {
+      const stick = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.026 * scale, 0.026 * scale, 0.30 * scale, 8),
+        new THREE.MeshPhongMaterial({ color: candleColors[i % candleColors.length] })
+      );
+      stick.position.set(x, topY + 0.15 * scale, z);
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.036 * scale, 8, 8), flameMat);
+      flame.position.set(x, topY + 0.33 * scale, z);
+      flame.scale.set(0.65, 1.3, 0.65);
+      this.toppingsGroup.add(stick, flame);
+    });
+  }
+
+  /** 50 sprinkles — shape-aware scatter, stays within boundaries */
+  _addSprinkles(ctx) {
+    const { topY, s, usableR } = ctx;
+    const baseScale = s * 0.85;
+    const count = 50;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const colors = [0xFF4081, 0x448AFF, 0xFFD740, 0x69F0AE, 0xE040FB, 0xFF6E40, 0xFF80AB, 0x40C4FF];
+    this._scatterPositions(count, ctx).forEach(({ x, z }, i) => {
       const sprinkle = new THREE.Mesh(
-        new THREE.BoxGeometry(0.02, 0.02, 0.08),
+        new THREE.BoxGeometry(0.016 * scale, 0.016 * scale, 0.068 * scale),
         new THREE.MeshPhongMaterial({ color: colors[i % colors.length] })
       );
-      sprinkle.position.set(Math.cos(angle) * dist, topY + 0.02, Math.sin(angle) * dist);
-      sprinkle.rotation.set(Math.random(), Math.random(), Math.random());
+      sprinkle.position.set(x, topY + 0.018 * scale, z);
+      sprinkle.rotation.set(0, Math.random() * Math.PI, 0);
       this.toppingsGroup.add(sprinkle);
+    });
+  }
+
+  /** Chocolate drizzle — cross-lines for full, outer cluster when text present */
+  _addChocDrizzle(ctx) {
+    const { topY, s, usableR, halfW, minR, shape } = ctx;
+    const baseScale = s * 0.9;
+    const geomScale = this._calculateGeometryScale(1, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const mat = new THREE.MeshPhongMaterial({ color: 0x3E2723, shininess: 40 });
+
+    if (minR === 0) {
+      // Full surface: radial lines from centre, length clamped to usable area
+      const lineLen = shape === 'square' ? halfW * 1.6 : usableR * 1.4;
+      for (let i = 0; i < 10; i++) {
+        const drizzle = new THREE.Mesh(new THREE.BoxGeometry(0.024 * scale, 0.011 * scale, lineLen), mat);
+        drizzle.position.set(0, topY + 0.011 * scale, 0);
+        drizzle.rotation.y = (i / 10) * Math.PI;
+        this.toppingsGroup.add(drizzle);
+      }
+    } else {
+      // Outer ring of drizzle dots outside text zone
+      this._getPositions(12, ctx, 0.86).forEach(({ x, z }) => {
+        const dot = new THREE.Mesh(new THREE.CylinderGeometry(0.024 * scale, 0.019 * scale, 0.038 * scale, 8), mat);
+        dot.position.set(x, topY + 0.019 * scale, z);
+        this.toppingsGroup.add(dot);
+      });
     }
   }
 
-  /** Add chocolate drizzle lines */
-  _addChocDrizzle(topY, r) {
-    const mat = new THREE.MeshPhongMaterial({ color: 0x3E2723 });
-    for (let i = 0; i < 8; i++) {
-      const drizzle = new THREE.Mesh(
-        new THREE.BoxGeometry(0.03, 0.01, r * 1.2),
-        mat
-      );
-      drizzle.position.set(0, topY + 0.01, 0);
-      drizzle.rotation.y = (i / 8) * Math.PI;
-      this.toppingsGroup.add(drizzle);
+  /** 5 flowers — ring/grid/heart, 5 petals each, colour-coded */
+  _addFlowers(ctx) {
+    const { topY, s, usableR } = ctx;
+    const baseScale = s * 0.9;
+    const count = 5;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const petalColors = [0xF48FB1, 0xCE93D8, 0xFFAB91, 0xAED581, 0x80DEEA];
+    const centerMat   = new THREE.MeshPhongMaterial({ color: 0xFFD54F });
+    this._getPositions(count, ctx, 0.78, Math.PI / 12).forEach(({ x, z }, fi) => {
+      const pMat   = new THREE.MeshPhongMaterial({ color: petalColors[fi % petalColors.length] });
+      const center = new THREE.Mesh(new THREE.SphereGeometry(0.038 * scale, 8, 8), centerMat);
+      center.position.set(x, topY + 0.058 * scale, z);
+      this.toppingsGroup.add(center);
+      for (let p = 0; p < 5; p++) {
+        const pa    = (p / 5) * Math.PI * 2;
+        const petal = new THREE.Mesh(new THREE.SphereGeometry(0.042 * scale, 8, 6), pMat);
+        petal.position.set(
+          x + Math.cos(pa) * 0.062 * scale,
+          topY + 0.048 * scale,
+          z + Math.sin(pa) * 0.062 * scale
+        );
+        petal.scale.set(1, 0.44, 1);
+        this.toppingsGroup.add(petal);
+      }
+    });
+  }
+
+  /** 5 macarons — ring/grid/heart, 3 layers each */
+  _addMacarons(ctx) {
+    const { topY, s, usableR } = ctx;
+    const baseScale = s * 0.9;
+    const count = 5;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const colors = [0xF48FB1, 0xCE93D8, 0xA5D6A7, 0xFFF59D, 0x80DEEA];
+    this._getPositions(count, ctx, 0.78, Math.PI / 10).forEach(({ x, z }, i) => {
+      const c       = colors[i % colors.length];
+      const shell   = new THREE.MeshPhongMaterial({ color: c, shininess: 60 });
+      const fillMat = new THREE.MeshPhongMaterial({ color: 0xFFF8E1 });
+      const R = 0.072 * scale;
+      const top  = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.036 * scale, 14), shell);
+      const fill = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.95, R * 0.95, 0.017 * scale, 14), fillMat);
+      const bot  = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.036 * scale, 14), shell);
+      top.position.set(x,  topY + 0.096 * scale, z);
+      fill.position.set(x, topY + 0.065 * scale, z);
+      bot.position.set(x,  topY + 0.036 * scale, z);
+      this.toppingsGroup.add(top, fill, bot);
+    });
+  }
+
+  /** 35 gold dust particles — shape-aware scatter */
+  _addGoldDust(ctx) {
+    const { topY, s, usableR } = ctx;
+    const baseScale = s * 0.85;
+    const count = 35;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const mat = new THREE.MeshPhongMaterial({ color: 0xFFD700, emissive: 0xFFA000, emissiveIntensity: 0.4 });
+    const geo = new THREE.SphereGeometry(0.013 * scale, 6, 6);
+    this._scatterPositions(count, ctx).forEach(({ x, z }) => {
+      const p = new THREE.Mesh(geo, mat);
+      p.position.set(x, topY + 0.017 * scale, z);
+      this.toppingsGroup.add(p);
+    });
+  }
+
+  /** Sugar pearls — outer ring + inner ring (inner omitted when text present) */
+  _addSugarPearls(ctx) {
+    const { topY, s, usableR, minR, shape } = ctx;
+    const baseScale = s * 0.9;
+    const count = 9;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const mat = new THREE.MeshPhongMaterial({ color: 0xFFF9C4, shininess: 120 });
+    const geo = new THREE.SphereGeometry(0.026 * scale, 10, 10);
+    const outer = this._getPositions(count, ctx, 0.86);
+    const inner = (minR === 0 && shape !== 'heart')
+      ? this._ringPositions(5, usableR * 0.38, Math.PI / 5).filter(({ x: px, z: pz }) => 
+          this._validatePositionInBounds(px, pz, ctx))
+      : [];
+    [...outer, ...inner].forEach(({ x, z }) => {
+      const p = new THREE.Mesh(geo, mat);
+      p.position.set(x, topY + 0.026 * scale, z);
+      this.toppingsGroup.add(p);
+    });
+  }
+
+  /** Mixed fresh fruit — outer ring of slices + inner strawberries (when no text) */
+  _addFreshFruits(ctx) {
+    const { topY, s, usableR, minR, shape } = ctx;
+    const baseScale = s * 0.9;
+    const fruitCount = 4;
+    const geomScale = this._calculateGeometryScale(fruitCount + 3, usableR * usableR);
+    const scale = baseScale * geomScale;
+
+    const orangeMat = new THREE.MeshPhongMaterial({ color: 0xFF9800 });
+    const kiwiMat   = new THREE.MeshPhongMaterial({ color: 0x7CB342 });
+    const strawMat  = new THREE.MeshPhongMaterial({ color: 0xE53935 });
+    const geoSlice  = new THREE.CylinderGeometry(0.072 * scale, 0.072 * scale, 0.026 * scale, 12);
+    const geoBerry  = new THREE.ConeGeometry(0.066 * scale, 0.13 * scale, 8);
+
+    this._getPositions(fruitCount, ctx, 0.82).forEach(({ x, z }, i) => {
+      const mat   = i % 2 === 0 ? orangeMat : kiwiMat;
+      const slice = new THREE.Mesh(geoSlice, mat);
+      slice.position.set(x, topY + 0.026 * scale, z);
+      this.toppingsGroup.add(slice);
+    });
+
+    // Inner strawberries only when centre is free and shape has inner room
+    if (minR === 0 && shape !== 'heart') {
+      const leafMat = new THREE.MeshPhongMaterial({ color: 0x388E3C });
+      this._ringPositions(3, usableR * 0.32, Math.PI / 6).filter(({ x: px, z: pz }) =>
+        this._validatePositionInBounds(px, pz, ctx)).forEach(({ x, z }) => {
+        const berry = new THREE.Mesh(geoBerry, strawMat);
+        berry.rotation.x = Math.PI;
+        berry.position.set(x, topY + 0.086 * scale, z);
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.042 * scale, 0.038 * scale, 4), leafMat);
+        leaf.position.set(x, topY + 0.154 * scale, z);
+        this.toppingsGroup.add(berry, leaf);
+      });
     }
   }
 
-  /** Add a flower */
-  _addFlower(x, y, z) {
-    const petalColors = [0xF48FB1, 0xCE93D8, 0xFFAB91];
-    const center = new THREE.Mesh(
-      new THREE.SphereGeometry(0.04, 8, 8),
-      new THREE.MeshPhongMaterial({ color: 0xFFD54F })
-    );
-    center.position.set(x, y + 0.06, z);
-    this.toppingsGroup.add(center);
-
-    for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2;
-      const petal = new THREE.Mesh(
-        new THREE.SphereGeometry(0.05, 8, 8),
-        new THREE.MeshPhongMaterial({ color: petalColors[i % 3] })
+  /** Ribbon around cake middle — square uses a rounded-rectangle torus approximation */
+  _addRibbon(s, shape) {
+    if (shape === 'square') {
+      // Four ribbon segments along the square cake sides
+      const mat  = new THREE.MeshPhongMaterial({ color: 0xE91E8C, shininess: 60 });
+      const half = 1.01 * s;
+      const h    = 0.032 * s;
+      const segW  = 2 * half;
+      [[0, -half, 0], [0, half, Math.PI / 2], [0, 0, 0], [0, 0, Math.PI / 2]].forEach((_, i) => {
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(segW, h, h), mat);
+        const off = half;
+        if (i === 0) seg.position.set(0, 0.4 * s, -off);
+        else if (i === 1) seg.position.set(off, 0.4 * s, 0);
+        else if (i === 2) seg.position.set(0, 0.4 * s, off);
+        else seg.position.set(-off, 0.4 * s, 0);
+        this.toppingsGroup.add(seg);
+      });
+    } else {
+      const ribbon = new THREE.Mesh(
+        new THREE.TorusGeometry(1.23 * s, 0.032 * s, 8, 64),
+        new THREE.MeshPhongMaterial({ color: 0xE91E8C, shininess: 60 })
       );
-      petal.position.set(
-        x + Math.cos(angle) * 0.07,
-        y + 0.05,
-        z + Math.sin(angle) * 0.07
-      );
-      petal.scale.set(1, 0.5, 1);
-      this.toppingsGroup.add(petal);
+      ribbon.position.y = 0.4 * s;
+      ribbon.rotation.x = Math.PI / 2;
+      this.toppingsGroup.add(ribbon);
     }
   }
 
-  /** Add a macaron */
-  _addMacaron(x, y, z) {
-    const colors = [0xF48FB1, 0xCE93D8, 0xA5D6A7, 0xFFF59D];
-    const c = colors[Math.floor(Math.random() * colors.length)];
-    const top = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.08, 0.04, 16),
-      new THREE.MeshPhongMaterial({ color: c })
-    );
-    const fill = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16),
-      new THREE.MeshPhongMaterial({ color: 0xFFF8E1 })
-    );
-    const bottom = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.08, 0.04, 16),
-      new THREE.MeshPhongMaterial({ color: c })
-    );
-    top.position.set(x, y + 0.1, z);
-    fill.position.set(x, y + 0.07, z);
-    bottom.position.set(x, y + 0.04, z);
-    this.toppingsGroup.add(top, fill, bottom);
-  }
+  /** 3 fondant bear figures — ring/grid/heart */
+  _addFondantFigures(ctx) {
+    const { topY, s, usableR } = ctx;
+    const baseScale = s * 0.9;
+    const count = 3;
+    const geomScale = this._calculateGeometryScale(count, usableR * usableR);
+    const scale = baseScale * geomScale;
 
-  /** Add gold dust particles */
-  _addGoldDust(topY, r) {
-    for (let i = 0; i < 30; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * r;
-      const particle = new THREE.Mesh(
-        new THREE.SphereGeometry(0.015, 6, 6),
-        new THREE.MeshPhongMaterial({ color: 0xFFD700, emissive: 0xFFA000, emissiveIntensity: 0.3 })
-      );
-      particle.position.set(Math.cos(angle) * dist, topY + 0.02, Math.sin(angle) * dist);
-      this.toppingsGroup.add(particle);
-    }
-  }
-
-  /** Add sugar pearls */
-  _addSugarPearls(topY, r) {
-    for (let i = 0; i < 20; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = r * (0.5 + Math.random() * 0.5);
-      const pearl = new THREE.Mesh(
-        new THREE.SphereGeometry(0.03, 8, 8),
-        new THREE.MeshPhongMaterial({ color: 0xFFFDE7, shininess: 100 })
-      );
-      pearl.position.set(Math.cos(angle) * dist, topY + 0.03, Math.sin(angle) * dist);
-      this.toppingsGroup.add(pearl);
-    }
-  }
-
-  /** Add mixed fresh fruit */
-  _addFreshFruit(x, y, z) {
-    // Orange slice
-    const orange = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.08, 0.03, 12),
-      new THREE.MeshPhongMaterial({ color: 0xFF9800 })
-    );
-    orange.position.set(x, y + 0.04, z);
-    this.toppingsGroup.add(orange);
-
-    // Kiwi slice next to it
-    const kiwi = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.06, 0.03, 12),
-      new THREE.MeshPhongMaterial({ color: 0x8BC34A })
-    );
-    kiwi.position.set(x + 0.12, y + 0.04, z + 0.05);
-    this.toppingsGroup.add(kiwi);
-  }
-
-  /** Add a ribbon around cake middle */
-  _addRibbon(s) {
-    const ribbon = new THREE.Mesh(
-      new THREE.TorusGeometry(1.23 * s, 0.03, 8, 64),
-      new THREE.MeshPhongMaterial({ color: 0xE91E8C })
-    );
-    ribbon.position.y = 0.4 * s;
-    ribbon.rotation.x = Math.PI / 2;
-    this.toppingsGroup.add(ribbon);
-  }
-
-  /** Add a small fondant bear figure */
-  _addFondantFigure(x, y, z) {
-    const mat = new THREE.MeshPhongMaterial({ color: 0xFFCC80 });
-    // Body
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), mat);
-    body.position.set(x, y + 0.08, z);
-    body.scale.set(1, 1.2, 1);
-    // Head
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), mat);
-    head.position.set(x, y + 0.22, z);
-    // Eyes
+    const mat    = new THREE.MeshPhongMaterial({ color: 0xFFCC80 });
     const eyeMat = new THREE.MeshPhongMaterial({ color: 0x212121 });
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.015, 6, 6), eyeMat);
-    eyeL.position.set(x - 0.025, y + 0.24, z + 0.05);
-    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.015, 6, 6), eyeMat);
-    eyeR.position.set(x + 0.025, y + 0.24, z + 0.05);
-    this.toppingsGroup.add(body, head, eyeL, eyeR);
+    this._getPositions(count, ctx, 0.72, Math.PI / 6).forEach(({ x, z }) => {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.072 * scale, 8, 8), mat);
+      body.position.set(x, topY + 0.072 * scale, z);
+      body.scale.set(1, 1.2, 1);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.052 * scale, 8, 8), mat);
+      head.position.set(x, topY + 0.200 * scale, z);
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.012 * scale, 6, 6), eyeMat);
+      eyeL.position.set(x - 0.020 * scale, topY + 0.214 * scale, z + 0.046 * scale);
+      const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.012 * scale, 6, 6), eyeMat);
+      eyeR.position.set(x + 0.020 * scale, topY + 0.214 * scale, z + 0.046 * scale);
+      this.toppingsGroup.add(body, head, eyeL, eyeR);
+    });
   }
 
   /**
@@ -716,38 +1050,60 @@ export class CakeScene {
    * @param {number} s - Scale
    */
   _buildText(text, color, font, shape, s) {
+    const CANVAS_W = 512;
+    const CANVAS_H = 128;
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 128;
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
     const ctx = canvas.getContext('2d');
 
     let fontFamily = 'Georgia';
     if (font === 'cursive') fontFamily = 'cursive';
     else if (font === 'modern') fontFamily = 'Arial';
 
-    ctx.clearRect(0, 0, 512, 128);
-    ctx.fillStyle = color || '#3D2B1F';
-    ctx.font = `bold 48px ${fontFamily}`;
+    const label = text.substring(0, 30);
+
+    // Auto-fit: start large, shrink until text fits 90% of canvas width
+    let fontSize = 72;
+    const maxTextW = CANVAS_W * 0.9;
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    while (fontSize > 12 && ctx.measureText(label).width > maxTextW) {
+      fontSize -= 2;
+      ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    }
+
+    // Thin white outline for readability over any topping color
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 6;
+    ctx.lineJoin = 'round';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text.substring(0, 30), 256, 64);
+    ctx.strokeText(label, CANVAS_W / 2, CANVAS_H / 2);
+    ctx.fillStyle = color || '#3D2B1F';
+    ctx.fillText(label, CANVAS_W / 2, CANVAS_H / 2);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
 
-    // Size the text plane to fit within the cake top surface
-    const r = (this._cakeRadius || 1.0 * s);
-    const planeW = Math.min(r * 1.6, 1.6 * s);
-    const planeH = Math.min(r * 0.55, 0.55 * s);
+    // Plane sized to cake radius — always fills the top proportionally
+    const radius = (this._cakeRadius || 1.2 * s);
+    const planeW = radius * 1.55;
+    const planeH = radius * 0.48;
 
     const geo = new THREE.PlaneGeometry(planeW, planeH);
-    const mat = new THREE.MeshPhongMaterial({ map: texture, transparent: true, depthWrite: false });
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false });
     const mesh = new THREE.Mesh(geo, mat);
 
-    // Lay flat on top of the cake, raised just above the surface
+    // renderOrder 999 guarantees text is always drawn last (above toppings)
+    mesh.renderOrder = 999;
+
+    // Elevate text well above toppings so nothing clips through it
+    // Heart bevel adds ~0.08, toppings add ~0.04 clearance
+    const surfaceOffset = (shape === 'heart') ? 0.12 : 0.06;
     const topY = (this._cakeTopY || 0.9 * s);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(0, topY + 0.01, 0);
+    mesh.position.set(0, topY + surfaceOffset, 0);
     this.toppingsGroup.add(mesh);
   }
 
