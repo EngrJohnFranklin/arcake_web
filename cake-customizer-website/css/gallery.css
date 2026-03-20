@@ -1,0 +1,155 @@
+/* ===================================================
+   GALLERY PAGE STYLES
+   =================================================== */
+
+.gallery-page {
+  padding-top: 100px;
+  min-height: 80vh;
+  background: var(--background);
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 24px;
+}
+
+/* ===================================================
+   GALLERY CARDS
+   =================================================== */
+
+.gallery-card {
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--gray-light);
+  background: var(--white);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.gallery-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-md);
+}
+
+.gallery-card-img {
+  width: 100%;
+  height: 200px;
+  background: linear-gradient(135deg, var(--background), var(--primary-light));
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.gallery-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gallery-card-info {
+  padding: 18px 18px 14px;
+  flex: 1;
+}
+
+.gallery-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  color: var(--text-light);
+  margin-bottom: 8px;
+}
+
+.gallery-summary {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.gallery-toppings {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.gallery-caketext {
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.gallery-card-actions {
+  display: flex;
+  gap: 10px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--gray-light);
+}
+
+.gallery-card-actions .btn {
+  flex: 1;
+  font-size: 0.82rem;
+  padding: 9px 14px;
+}
+
+/* ===================================================
+   EMPTY STATE
+   =================================================== */
+
+.gallery-empty {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-icon {
+  margin: 0 auto 20px;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(233, 30, 140, 0.12);
+}
+
+.gallery-empty h3 {
+  margin-bottom: 10px;
+  color: var(--text);
+  font-size: 1.5rem;
+}
+
+.gallery-empty p {
+  color: var(--text-light);
+  margin-bottom: 24px;
+  font-size: 1rem;
+}
+
+/* ===================================================
+   RESPONSIVE
+   =================================================== */
+
+@media (max-width: 768px) {
+  .gallery-page {
+    padding-top: 80px;
+  }
+
+  .gallery-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .gallery-card-img {
+    height: 180px;
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "cake-customizer-website",
+  "version": "1.0.0",
+  "description": "AR-Based Cake Customization Website - Thesis Project",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "0.128.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
