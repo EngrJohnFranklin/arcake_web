@@ -247,12 +247,12 @@ export class CakeScene {
       frostTop.position.y = 0.85 * s;
       this.cakeGroup.add(frostTop);
 
-      // Side frosting
+      // Side frosting — height exactly matches sponge so there are no gaps
       const frostSide = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.22 * s, 1.22 * s, 0.78 * s, 64, 1, true),
+        new THREE.CylinderGeometry(1.22 * s, 1.22 * s, 0.80 * s, 64, 1, true),
         new THREE.MeshPhongMaterial({ color: frost, shininess: 80, side: THREE.FrontSide })
       );
-      frostSide.position.y = 0.4 * s;
+      frostSide.position.y = 0.40 * s;
       this.cakeGroup.add(frostSide);
     }
 
@@ -344,13 +344,29 @@ export class CakeScene {
     this.cakeGroup.add(sponge);
 
     if (style !== 'naked') {
-      const frostGeo = new THREE.ExtrudeGeometry(heartShape, { ...ext, depth: 0.1 * s });
-      frostGeo.center();
-      frostGeo.scale(s * (HEART_SCALE + 0.013), s * (HEART_SCALE + 0.013), 1);
-      const frostMesh = new THREE.Mesh(frostGeo, new THREE.MeshPhongMaterial({ color: frost, shininess: 80 }));
-      frostMesh.rotation.x = -Math.PI / 2;
-      frostMesh.position.y = 0.85 * s;
-      this.cakeGroup.add(frostMesh);
+      const frostMat = new THREE.MeshPhongMaterial({ color: frost, shininess: 80 });
+
+      // Full-height side shell — 1.8 % larger than sponge, covers all sides + gives a
+      // clean top ledge. depth 0.82s slightly overshoots sponge (0.80s) so the seam
+      // between shell top and cap bottom is invisible.
+      const shellGeo = new THREE.ExtrudeGeometry(heartShape, { ...ext, depth: 0.82 * s });
+      shellGeo.center();
+      shellGeo.scale(s * (HEART_SCALE + 0.018), s * (HEART_SCALE + 0.018), 1);
+      const shellMesh = new THREE.Mesh(shellGeo, frostMat);
+      shellMesh.rotation.x = -Math.PI / 2;
+      // center of depth (0.82s) sits at sponge centre so shell spans y = 0 … 0.82s
+      shellMesh.position.y = 0.41 * s;
+      this.cakeGroup.add(shellMesh);
+
+      // Smooth top cap — polished slab that sits flush on the shell top edge
+      const capGeo = new THREE.ExtrudeGeometry(heartShape, { ...ext, depth: 0.10 * s });
+      capGeo.center();
+      capGeo.scale(s * (HEART_SCALE + 0.013), s * (HEART_SCALE + 0.013), 1);
+      const capMesh = new THREE.Mesh(capGeo, frostMat);
+      capMesh.rotation.x = -Math.PI / 2;
+      // cap spans 0.82s … 0.92s (centred at 0.87s)
+      capMesh.position.y = 0.87 * s;
+      this.cakeGroup.add(capMesh);
     }
 
     // Drip radius scaled with heart size; topY unchanged (vertical extrude depth stays)
@@ -403,17 +419,17 @@ export class CakeScene {
       ft.position.y = 1.02 * s;
       this.cakeGroup.add(ft);
 
-      // Side frosting bottom
+      // Side frosting bottom — height exactly matches bottom tier (0.50s)
       const sfb = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.23 * s, 1.23 * s, 0.48 * s, 64, 1, true),
+        new THREE.CylinderGeometry(1.23 * s, 1.23 * s, 0.50 * s, 64, 1, true),
         new THREE.MeshPhongMaterial({ color: frost, shininess: 80, side: THREE.FrontSide })
       );
       sfb.position.y = 0.25 * s;
       this.cakeGroup.add(sfb);
 
-      // Side frosting top
+      // Side frosting top — height exactly matches top tier (0.50s)
       const sft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.88 * s, 0.88 * s, 0.48 * s, 64, 1, true),
+        new THREE.CylinderGeometry(0.88 * s, 0.88 * s, 0.50 * s, 64, 1, true),
         new THREE.MeshPhongMaterial({ color: frost, shininess: 80, side: THREE.FrontSide })
       );
       sft.position.y = 0.75 * s;
