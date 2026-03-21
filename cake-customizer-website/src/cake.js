@@ -328,50 +328,55 @@ export class CakeScene {
    * @param {string} style - Frosting style
    */
   _buildSquareCake(s, color, frost, style) {
+    // ── Sponge (inner) ───────────────────────────────────────
+    const spongeMat = new THREE.MeshPhongMaterial({
+      color,
+      shininess: style === 'naked' ? 8 : 25,
+      flatShading: style === 'naked'
+    });
     const sponge = new THREE.Mesh(
-      new THREE.BoxGeometry(2 * s, 0.8 * s, 2 * s),
-      new THREE.MeshPhongMaterial({ color })
+      new THREE.BoxGeometry(2.00 * s, 0.80 * s, 2.00 * s),
+      spongeMat
     );
-    sponge.position.y = 0.4 * s;
+    sponge.position.y = 0.40 * s;
     this.cakeGroup.add(sponge);
 
     if (style === 'naked') {
-      this._addNakedLines(s, 0.8 * s, 0, color, s, true);
-    } else {
-      const frostMat = this._frostMat(frost, style);
-
-      // Top slab
-      const frostTop = new THREE.Mesh(
-        new THREE.BoxGeometry(2.08 * s, 0.1 * s, 2.08 * s),
-        frostMat
-      );
-      frostTop.position.y = 0.85 * s;
-      this.cakeGroup.add(frostTop);
-
-      // Four side frosting panels
-      const thick = 0.045 * s;
-      const h     = 0.82 * s;
-      const half  = s + thick / 2;
-      const fullSpan = 2.09 * s + thick * 2;
-      [
-        // front / back (span full width incl. corners)
-        { geo: new THREE.BoxGeometry(fullSpan, h, thick), x: 0,     z:  half },
-        { geo: new THREE.BoxGeometry(fullSpan, h, thick), x: 0,     z: -half },
-        // left / right (span the sponge depth)
-        { geo: new THREE.BoxGeometry(thick, h, 2 * s), x:  half, z: 0 },
-        { geo: new THREE.BoxGeometry(thick, h, 2 * s), x: -half, z: 0 },
-      ].forEach(({ geo, x, z }) => {
-        const panel = new THREE.Mesh(geo, frostMat);
-        panel.position.set(x, 0.41 * s, z);
-        this.cakeGroup.add(panel);
-      });
+      this._addNakedLines(s, 0.80 * s, 0, color, s, true);
+      this._cakeTopY   = 0.80 * s;
+      this._cakeRadius = 1.00 * s;
+      return;
     }
 
-    if (style === 'drip')    this._addSquareDrip(s, frost);
-    if (style === 'rosette') this._addRosettePiping(0.9 * s, 0.8 * s, frost, 10, s);
+    const frostMat = this._frostMat(frost, style);
 
-    this._cakeTopY = 0.9 * s;
-    this._cakeRadius = 1.0 * s;
+    // ── Frosting shell (outer) — ONE seamless box wrapping the sponge ──
+    const frostShell = new THREE.Mesh(
+      new THREE.BoxGeometry(2.14 * s, 0.82 * s, 2.14 * s),
+      frostMat
+    );
+    frostShell.position.y = 0.41 * s;
+    frostShell.renderOrder = 1;
+    this.cakeGroup.add(frostShell);
+    sponge.renderOrder = 0;
+
+    // ── Top frosting cap — sits flush on top of shell ───────────
+    // Shell bottom = 0.00, shell top = 0.82 * s
+    // Cap centre   = 0.82 * s + 0.05 * s = 0.87 * s
+    const frostTop = new THREE.Mesh(
+      new THREE.BoxGeometry(2.14 * s, 0.10 * s, 2.14 * s),
+      frostMat
+    );
+    frostTop.position.y = 0.87 * s;
+    frostTop.renderOrder = 1;
+    this.cakeGroup.add(frostTop);
+
+    // _cakeTopY = top of cap = 0.87 * s + 0.05 * s = 0.92 * s
+    this._cakeTopY   = 0.92 * s;
+    this._cakeRadius = 1.07 * s;
+
+    if (style === 'drip')    this._addSquareDrip(s, frost);
+    if (style === 'rosette') this._addSquareRosette(s, frost);
   }
 
   /**
@@ -442,8 +447,8 @@ export class CakeScene {
 
     // Drip: follow actual heart outline
     if (style === 'drip')    this._addHeartDripEffect(heartShape, s * FS, H, frost, 22, s);
-    // Rosette: outer ring at safe radius inside heart at all angles
-    if (style === 'rosette') this._addRosettePiping(H + CAP, 0.8 * s, frost, 8, s);
+    // Rosette: puffs along the heart outline edge only
+    if (style === 'rosette') this._addHeartEdgeRosette(heartShape, s, frost, H + CAP);
 
     this._cakeTopY   = H + CAP;  // 0.9 * s — toppings sit on cap surface
     this._cakeRadius = 1.17 * s;
@@ -526,11 +531,14 @@ export class CakeScene {
     }
 
     if (style === 'drip') {
-      this._addDripEffect(0.87 * s, 1.02 * s, frost, 32, s);
+      // Drips on BOTH tiers
+      this._addDripEffect(0.87 * s, 1.02 * s, frost, 28, s);        // top tier
+      this._addDripEffect(1.22 * s, 0.52 * s, frost, 36, s);        // bottom tier
     }
     if (style === 'rosette') {
-      // Rosette piping on the top tier only
-      this._addRosettePiping(1.05 * s, 0.85 * s, frost, 10, s * 0.8);
+      // Rosette edge ring on BOTH tiers
+      this._addRosettePiping(1.05 * s, 0.85 * s, frost, 10, s * 0.8);  // top tier
+      this._addRosettePiping(0.52 * s, 1.20 * s, frost, 14, s);         // bottom tier
     }
 
     this._cakeTopY = 1.05 * s;
@@ -643,36 +651,119 @@ export class CakeScene {
     }
   }
 
+  _addHeartEdgeRosette(heartShape, s, frost, topY) {
+    const mat     = new THREE.MeshPhongMaterial({ color: frost, shininess: 35 });
+    const FS      = 0.955;                // must match FS in _buildHeartCake
+    const scaleXY = s * FS * 0.93;       // slightly inset from the shell edge
+    const count   = 22;
+
+    const pts  = heartShape.getPoints(count * 6);
+    const step = Math.max(1, Math.floor(pts.length / count));
+
+    for (let i = 0; i < count; i++) {
+      const pt = pts[(i * step) % pts.length];
+      const wx =  pt.x * scaleXY;       // world X
+      const wz = -pt.y * scaleXY;       // world Z (shape-Y flips on rotation.x=-PI/2)
+
+      // Skip the cleft notch area
+      if (wz < -s * 0.80) continue;
+
+      const sv = 0.85 + Math.random() * 0.30;
+      const puff = new THREE.Mesh(
+        new THREE.SphereGeometry(0.072 * s, 9, 8), mat
+      );
+      puff.scale.set(sv, 0.50 * sv, sv);
+      puff.rotation.y = Math.random() * Math.PI;
+      puff.position.set(wx, topY + 0.028 * s, wz);
+      this.cakeGroup.add(puff);
+    }
+  }
+
   /**
    * Add drip effect on square cake edges
    * @param {number} s - Scale
    * @param {THREE.Color} color - Drip color
    */
-  _addSquareDrip(s, color) {
-    const mat = new THREE.MeshPhongMaterial({ color, shininess: 80 });
-    const half = 1.01 * s;
-    const dripTopY = this._cakeTopY || 0.85 * s;
-    for (let i = 0; i < 20; i++) {
-      const t = (i / 20) * 4;
-      let x, z;
-      if (t < 1) { x = -half + t * 2 * half; z = -half; }
-      else if (t < 2) { x = half; z = -half + (t - 1) * 2 * half; }
-      else if (t < 3) { x = half - (t - 2) * 2 * half; z = half; }
-      else { x = -half; z = half - (t - 3) * 2 * half; }
-      const thick = 0.8 + Math.random() * 0.4;
-      const dripLen = (0.1 + Math.random() * 0.2) * s;
-      const drip = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.03 * s * thick, 0.02 * s * thick, dripLen, 8),
-        mat
-      );
-      drip.position.set(x, dripTopY - dripLen / 2, z);
-      this.cakeGroup.add(drip);
-      // Pool cap at drip bottom
-      const tear = new THREE.Mesh(
-        new THREE.SphereGeometry(0.025 * s * thick, 6, 6), mat
-      );
-      tear.position.set(x, dripTopY - dripLen, z);
-      this.cakeGroup.add(tear);
+  _addSquareDrip(s, frost) {
+    const mat     = new THREE.MeshPhongMaterial({ color: frost, shininess: 90 });
+    const topY    = this._cakeTopY;        // = 0.92 * s — top of the frosting cap
+    const half    = 1.07 * s;             // outer edge of the frosting shell
+    const perSide = 7;                    // drips per side (4 sides × 7 = 28 total)
+
+    for (let side = 0; side < 4; side++) {
+      for (let i = 0; i < perSide; i++) {
+        const t      = (i + 0.5) / perSide;
+        const jitter = (Math.random() - 0.5) * 0.04 * s;
+        const along  = (-half + 0.10 * s) + t * (2 * half - 0.20 * s) + jitter;
+
+        let x, z;
+        if      (side === 0) { x = along;  z = -half; }   // front  (−Z face)
+        else if (side === 1) { x =  half;  z = along; }   // right  (+X face)
+        else if (side === 2) { x = along;  z =  half; }   // back   (+Z face)
+        else                 { x = -half;  z = along; }   // left   (−X face)
+
+        const len  = (0.12 + Math.random() * 0.18) * s;
+        const topR = (0.025 + Math.random() * 0.015) * s;
+        const botR = topR * 0.45;
+
+        // Drip cylinder starts at topY and hangs downward
+        const drip = new THREE.Mesh(
+          new THREE.CylinderGeometry(topR, botR, len, 8),
+          mat
+        );
+        drip.position.set(x, topY - len / 2, z);
+        this.cakeGroup.add(drip);
+
+        // Teardrop sphere at the very bottom tip of the drip
+        const drop = new THREE.Mesh(
+          new THREE.SphereGeometry(botR * 1.8, 7, 7),
+          mat
+        );
+        drop.position.set(x, topY - len - botR * 0.9, z);
+        this.cakeGroup.add(drop);
+      }
+    }
+  }
+
+  _addSquareRosette(s, frost) {
+    const mat    = new THREE.MeshPhongMaterial({ color: frost, shininess: 35 });
+    const topY   = this._cakeTopY;        // = 0.92 * s
+    const half   = 1.07 * s;
+    const inset  = 0.05 * s;
+    const edge   = half - inset;
+    const perSide = 7;
+
+    // 4 corner accent puffs (larger, at each corner)
+    [
+      { x:  edge, z:  edge },
+      { x:  edge, z: -edge },
+      { x: -edge, z:  edge },
+      { x: -edge, z: -edge },
+    ].forEach(({ x, z }) => {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.092 * s, 9, 8), mat);
+      p.scale.set(1.0, 0.52, 1.0);
+      p.position.set(x, topY + 0.040 * s, z);
+      this.cakeGroup.add(p);
+    });
+
+    // Edge puffs along all 4 sides
+    for (let side = 0; side < 4; side++) {
+      for (let i = 0; i < perSide; i++) {
+        const t     = (i + 0.5) / perSide;
+        const along = -edge + t * 2 * edge;
+        let x, z;
+        if      (side === 0) { x = along;  z = -edge; }
+        else if (side === 1) { x =  edge;  z = along; }
+        else if (side === 2) { x = along;  z =  edge; }
+        else                 { x = -edge;  z = along; }
+
+        const sv = 0.85 + Math.random() * 0.28;
+        const p  = new THREE.Mesh(new THREE.SphereGeometry(0.072 * s, 9, 8), mat);
+        p.scale.set(sv, 0.50 * sv, sv);
+        p.rotation.y = Math.random() * Math.PI;
+        p.position.set(x, topY + 0.028 * s, z);
+        this.cakeGroup.add(p);
+      }
     }
   }
 
