@@ -1,0 +1,232 @@
+/* ════════════════════════════════════════════════════════════
+   flow.css — Styles for StartFlow.js and ARPreview.js
+   ════════════════════════════════════════════════════════════ */
+
+/* ── Shared overlay base ── */
+.sf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.52);
+}
+
+/* ── Choice modal card ── */
+.sf-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 40px 32px 36px;
+  width: min(460px, 92vw);
+  text-align: center;
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.18);
+}
+.sf-card h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.sf-card p {
+  margin: 0 0 32px;
+  font-size: 15px;
+  color: #888;
+  line-height: 1.5;
+}
+
+/* ── Choice buttons ── */
+.sf-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.sf-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 16px 20px;
+  border: 2px solid #f0f0f0;
+  border-radius: 16px;
+  background: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.sf-choice-btn:hover {
+  border-color: #e91e8c;
+  background: #fff0f6;
+  transform: translateY(-2px);
+}
+.sf-choice-btn svg {
+  width: 48px;
+  height: 48px;
+  stroke: #e91e8c;
+}
+.sf-choice-btn span.sf-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: #aaa;
+}
+
+/* ── Confirm card (shape detected) ── */
+.sf-confirm-card {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9100;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  padding: 28px 24px 40px;
+  text-align: center;
+  box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.14);
+}
+.sf-confirm-card h3 {
+  margin: 12px 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.sf-confirm-card p {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: #999;
+}
+
+/* ── Shared action buttons ── */
+.sf-btn-primary {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  background: #e91e8c;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: opacity 0.15s;
+}
+.sf-btn-primary:hover {
+  opacity: 0.88;
+}
+.sf-btn-secondary {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  color: #888;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* ── AR Preview container ── */
+.ar-container {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: #000;
+}
+.ar-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ar-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── AR top bar ── */
+.ar-top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
+  z-index: 10;
+}
+.ar-top-bar span {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+.ar-top-btn {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 18px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* ── AR bottom bar ── */
+.ar-bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 24px 36px;
+  display: flex;
+  gap: 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+  z-index: 10;
+}
+
+/* ── AR floating hint ── */
+.ar-hint {
+  position: absolute;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.48);
+  color: #fff;
+  font-size: 13px;
+  padding: 7px 16px;
+  border-radius: 16px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ── ShapeScanPrompt option buttons ── */
+.ssp-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 12px 16px;
+  border: 2px solid #f0f0f0;
+  border-radius: 14px;
+  background: #fafafa;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  transition: border-color 0.18s, background 0.18s;
+}
+.ssp-btn:hover {
+  border-color: #E91E8C;
+  background: #fff0f6;
+}
+.ssp-btn small {
+  font-size: 11px;
+  font-weight: 400;
+  color: #bbb;
+}

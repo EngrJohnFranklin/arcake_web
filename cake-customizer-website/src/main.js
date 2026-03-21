@@ -4,6 +4,7 @@
  */
 
 import { initCommonUI, initCustomizerUI } from './ui.js';
+import { showStartChoiceModal } from './StartFlow.js';
 
 /**
  * Detect which page we're on and initialize accordingly
@@ -30,6 +31,21 @@ async function init() {
  */
 async function initHomePage() {
   console.log('[ARCake] Home page');
+
+  // Intercept "Start Customizing" — show scan choice modal first
+  const startBtn = document.getElementById('start-btn');
+  if (startBtn) {
+    startBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      showStartChoiceModal((detectedShape) => {
+        const shape = ['round', 'square', 'heart', 'layered'].includes(detectedShape)
+          ? detectedShape
+          : 'round';
+        window.location.href = `./pages/customize.html?shape=${shape}`;
+      });
+    });
+  }
+
   const canvas = document.getElementById('heroCanvas');
   if (!canvas) return;
 
@@ -56,6 +72,12 @@ async function initCustomizePage() {
 
     const custState = new CustomizationState();
 
+    // Apply shape detected by the scanner on the home page (passed via URL)
+    const urlShape = new URLSearchParams(window.location.search).get('shape');
+    if (urlShape && ['round', 'square', 'heart', 'layered'].includes(urlShape)) {
+      custState.set('shape', urlShape);
+    }
+
     // Check for loaded design from gallery
     const loadedDesign = sessionStorage.getItem('arcake_loadDesign');
     if (loadedDesign) {
@@ -69,6 +91,8 @@ async function initCustomizePage() {
     }
 
     const cakeScene = new CakeScene(canvas);
+    window.customizationState = custState;
+    window.cakeScene = cakeScene;
     initCustomizerUI(custState, cakeScene);
     console.log('[ARCake] Customizer initialized');
   } catch (err) {
