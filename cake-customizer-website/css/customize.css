@@ -314,74 +314,215 @@
 }
 
 /* ===================================================
-   TOPPINGS — 4-COLUMN GRID
+   TOPPINGS — CATEGORY GROUPS
    =================================================== */
 
-.topping-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+.topping-count {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--accent);
+  margin-left: auto;
+  margin-right: 6px;
+  min-width: 50px;
+  text-align: right;
 }
 
-.topping-tile {
+.topping-groups {
   display: flex;
   flex-direction: column;
+  gap: 14px;
+}
+
+.topping-group {
+  border: 1px solid var(--gray);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.topping-group-header {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 12px 4px;
-  border: 2px solid var(--gray);
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--gray-light);
+  border-bottom: 1px solid var(--gray);
+}
+
+.topping-group-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* Sub-groups within a combined topping-group card */
+.topping-subgroup {
+  border-top: 1px solid var(--gray);
+}
+
+.topping-group-header + .topping-subgroup {
+  border-top: none;
+}
+
+.topping-subgroup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(248, 187, 217, 0.035);
+}
+
+.topping-subgroup-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-light);
+}
+
+.topping-clear-btn {
+  font-size: 0.7rem;
+  color: var(--text-light);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  font-family: var(--font-body);
+}
+
+.topping-clear-btn:hover {
+  color: var(--accent);
+  background: rgba(233, 30, 140, 0.06);
+}
+
+.topping-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.topping-option-btn {
+  flex: 1 1 auto;
+  min-width: max-content;
+  padding: 7px 14px;
+  border: 1.5px solid var(--gray);
   border-radius: var(--radius-sm);
   background: var(--white);
-  cursor: pointer;
-  transition: all 0.18s ease;
-  position: relative;
-  text-align: center;
-  min-height: 50px;
-}
-
-.topping-tile:hover {
-  border-color: var(--primary);
-  background: var(--primary-light);
-  transform: translateY(-1px);
-}
-
-.topping-tile.active {
-  border-color: var(--accent);
-  background: rgba(233, 30, 140, 0.05);
-  box-shadow: 0 0 0 2px rgba(233, 30, 140, 0.15);
-}
-
-.topping-tile-label {
-  font-size: 0.7rem;
-  font-weight: 600;
   color: var(--text);
-  line-height: 1.25;
-  letter-spacing: 0.01em;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s, color 0.18s;
+  font-family: var(--font-body);
+  text-align: center;
+  white-space: nowrap;
 }
 
-.topping-tile.active .topping-tile-label {
+.topping-option-btn:hover {
+  border-color: var(--accent);
+  background: var(--primary-light);
   color: var(--accent);
 }
 
-.check-mark {
-  display: none;
-  position: absolute;
-  top: -7px;
-  right: -7px;
+.topping-option-btn.active {
+  border-color: var(--accent);
   background: var(--accent);
   color: var(--white);
-  width: 18px;
-  height: 18px;
-  border-radius: var(--radius-full);
-  font-size: 0.65rem;
-  line-height: 18px;
-  text-align: center;
-  font-weight: 700;
-  box-shadow: 0 2px 6px rgba(233, 30, 140, 0.3);
+  font-weight: 600;
 }
 
-.topping-tile.active .check-mark {
-  display: block;
+.topping-rule-note {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: var(--text-light);
+  text-align: center;
+}
+
+/* ─── Quantity stepper ────────────────────────────────────────────────────── */
+.topping-qty-row {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--gray);
+  background: rgba(248, 187, 217, 0.06);
+}
+
+.topping-qty-row.visible {
+  display: flex;
+}
+
+.topping-qty-label {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.topping-qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topping-qty-btn {
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid var(--gray);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  font-family: var(--font-body);
+  line-height: 1;
+  padding: 0;
+}
+
+.topping-qty-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--primary-light);
+  color: var(--accent);
+}
+
+.topping-qty-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.topping-qty-input {
+  width: 38px;
+  height: 28px;
+  text-align: center;
+  border: 1.5px solid var(--gray);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--white);
+  font-family: var(--font-body);
+  -moz-appearance: textfield;
+  cursor: text;
+}
+
+.topping-qty-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(233, 30, 140, 0.15);
+}
+
+.topping-qty-input::-webkit-outer-spin-button,
+.topping-qty-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* ===================================================
@@ -493,9 +634,18 @@
     padding: 9px 10px;
   }
 
-  .topping-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 7px;
+  .topping-options {
+    gap: 5px;
+    padding: 8px 10px;
+  }
+
+  .topping-option-btn {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  .topping-qty-row {
+    padding: 6px 10px;
   }
 
   .canvas-controls .btn {
@@ -518,13 +668,21 @@
     padding: 8px 8px;
   }
 
-  .topping-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
+  .topping-option-btn {
+    padding: 5px 8px;
+    font-size: 0.75rem;
+    min-width: 0;
   }
 
-  .topping-tile {
-    padding: 10px 2px;
+  .topping-qty-btn {
+    width: 26px;
+    height: 26px;
+  }
+
+  .topping-qty-input {
+    width: 34px;
+    height: 26px;
+    font-size: 0.8rem;
   }
 
   .section-header {

@@ -9,30 +9,29 @@
  * @param {import('./cake.js').CakeScene} cakeScene
  */
 export function initCustomizerUI(custState, cakeScene) {
-  _bindOptionGroups(custState);
-  _bindColorSwatches(custState);
-  _bindToppings(custState);
-  _bindTextInputs(custState);
+  _bindOptionGroups(custState, cakeScene);
+  _bindColorSwatches(custState, cakeScene);
+  _bindToppings(custState, cakeScene);
+  _bindTextInputs(custState, cakeScene);
   _bindActionButtons(custState, cakeScene);
   _setInitialActiveStates(custState);
 
-  // Listen for state changes and rebuild cake
+  // Fallback debounced rebuild — catches any state change not handled by an
+  // immediate rebuild above (e.g. programmatic loadState, sessionStorage load).
+  // Always reads the freshest state so rapid changes coalesce correctly.
   let rebuildTimer = null;
-  custState.onChange((e) => {
+  custState.onChange(() => {
     clearTimeout(rebuildTimer);
     rebuildTimer = setTimeout(() => {
       try {
-        cakeScene.buildCake(e.detail.state);
+        cakeScene.buildCake(custState.getState());
       } catch (err) {
-        console.error('[ARCake] Error rebuilding cake:', err);
+        console.error('[ARCake] Fallback rebuild error:', err);
       }
-    }, 50);
+    }, 60);
 
-    // Update UI topping count
-    const countEl = document.querySelector('.topping-count');
-    if (countEl) {
-      countEl.textContent = `(${custState.getToppingCount()}/5)`;
-    }
+    // Update topping count badge on every change
+    _updateToppingCount(custState);
   });
 
   // Initial build
@@ -42,20 +41,22 @@ export function initCustomizerUI(custState, cakeScene) {
 /**
  * Bind single-select option groups (shape, size, flavor, frostingStyle)
  * @param {import('./customization.js').CustomizationState} custState
+ * @param {import('./cake.js').CakeScene} cakeScene
  */
-function _bindOptionGroups(custState) {
+function _bindOptionGroups(custState, cakeScene) {
   const groups = document.querySelectorAll('.option-group[data-option]');
   groups.forEach((group) => {
     const optionKey = group.dataset.option;
-    if (optionKey === 'toppings' || optionKey === 'frostingColor' || optionKey === 'boardColor') return;
+    if (optionKey === 'frostingColor' || optionKey === 'boardColor') return;
 
     const buttons = group.querySelectorAll('.option-btn');
     buttons.forEach((btn) => {
       btn.addEventListener('click', () => {
-        // Remove active from siblings
         buttons.forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         custState.set(optionKey, btn.dataset.value);
+        // Immediate rebuild — no visible lag on shape/size/flavor/style change
+        try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
       });
     });
   });
@@ -64,8 +65,9 @@ function _bindOptionGroups(custState) {
 /**
  * Bind color swatch selections (frosting color, board color, custom color input)
  * @param {import('./customization.js').CustomizationState} custState
+ * @param {import('./cake.js').CakeScene} cakeScene
  */
-function _bindColorSwatches(custState) {
+function _bindColorSwatches(custState, cakeScene) {
   // Preset frosting colors
   const frostPresets = document.querySelector('.preset-colors[data-option="frostingColor"]');
   if (frostPresets) {
@@ -75,23 +77,24 @@ function _bindColorSwatches(custState) {
         swatches.forEach((s) => s.classList.remove('active'));
         sw.classList.add('active');
         custState.set('frostingColor', sw.dataset.value);
+        try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
       });
     });
   }
 
-  // Custom frosting color picker
+  // Custom frosting color picker — debounced because user drags the picker
   const customFrostInput = document.getElementById('customFrostingColor');
   if (customFrostInput) {
     let debounceTimer = null;
     customFrostInput.addEventListener('input', () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        // Deactivate preset swatches
         if (frostPresets) {
           frostPresets.querySelectorAll('.color-swatch').forEach((s) => s.classList.remove('active'));
         }
         custState.set('frostingColor', customFrostInput.value);
-      }, 100);
+        try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
+      }, 80);
     });
   }
 
@@ -104,50 +107,169 @@ function _bindColorSwatches(custState) {
         swatches.forEach((s) => s.classList.remove('active'));
         sw.classList.add('active');
         custState.set('boardColor', sw.dataset.value);
+        try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
       });
     });
   }
 }
 
 /**
- * Bind topping toggle buttons
+ * Bind topping option buttons, clear buttons, and quantity steppers.
+ * One selection per category; clicking the active option deselects it.
  * @param {import('./customization.js').CustomizationState} custState
+ * @param {import('./cake.js').CakeScene} cakeScene
  */
-function _bindToppings(custState) {
-  const toppingBtns = document.querySelectorAll('.topping-tile');
-  toppingBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const topping = btn.dataset.value;
-      const isActive = custState.hasTopping(topping);
+function _bindToppings(custState, cakeScene) {
+  // Categories that live inside the shared Decorations card — only one may be
+  // active at a time across all three sub-groups.
+  const DECORATION_GROUP = ['sprinkles', 'fruits', 'decorations'];
 
-      if (isActive) {
-        custState.toggleTopping(topping);
-        btn.classList.remove('active');
-      } else {
-        const added = custState.toggleTopping(topping);
-        if (added) {
-          btn.classList.add('active');
-        } else {
-          showToast('Maximum 5 toppings allowed!', 'error');
+  // Topping option buttons (radio-style within category)
+  document.querySelectorAll('.topping-option-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.category;
+      custState.setTopping(cat, btn.dataset.value);
+
+      // Mutual exclusion: selecting anything inside the Decorations card
+      // clears the other two decoration sub-groups.
+      if (DECORATION_GROUP.includes(cat)) {
+        DECORATION_GROUP.forEach((other) => {
+          if (other !== cat) {
+            custState.clearTopping(other);
+            _refreshCategoryUI(other, custState);
+          }
+        });
+      }
+
+      _refreshCategoryUI(cat, custState);
+      // Instant visual feedback — no debounce needed for single clicks
+      try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
+    });
+  });
+
+  // Clear buttons — deselect that category
+  document.querySelectorAll('.topping-clear-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      custState.clearTopping(btn.dataset.category);
+      _refreshCategoryUI(btn.dataset.category, custState);
+      try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
+    });
+  });
+
+  // Quantity steppers (fruits + candles)
+  document.querySelectorAll('.topping-qty-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const { category, action } = btn.dataset;
+
+      // Auto-select first option if the user presses +/- but no type is chosen yet
+      if (!custState.getTopping(category)) {
+        const firstBtn = document.querySelector(`.topping-option-btn[data-category="${category}"]`);
+        if (firstBtn) {
+          custState.setTopping(category, firstBtn.dataset.value);
+          _refreshCategoryUI(category, custState);
         }
       }
+
+      const current = custState.getToppingQuantity(category);
+      const newQty  = action === 'inc' ? current + 1 : current - 1;
+      custState.setToppingQuantity(category, newQty);
+      _updateQuantityUI(category, custState);
+
+      // Immediate rebuild — do not wait for the 50 ms debounce
+      try {
+        cakeScene.buildCake(custState.getState());
+      } catch (err) {
+        console.error('[ARCake] Error rebuilding cake on qty change:', err);
+      }
+    });
+  });
+
+  // Direct quantity input — allow typing a number, clamp on commit
+  document.querySelectorAll('.topping-qty-input').forEach((input) => {
+    input.addEventListener('change', () => {
+      const { category } = input.dataset;
+      const val = parseInt(input.value, 10);
+      if (!isNaN(val)) {
+        custState.setToppingQuantity(category, val);
+        _updateQuantityUI(category, custState);
+
+        // Immediate rebuild
+        try {
+          cakeScene.buildCake(custState.getState());
+        } catch (err) {
+          console.error('[ARCake] Error rebuilding cake on qty input:', err);
+        }
+      }
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
     });
   });
 }
 
 /**
- * Bind text input, font selector, and text color picker
+ * Refresh the active state of all buttons in a single category,
+ * and update the quantity stepper if applicable.
+ * @param {string} category
  * @param {import('./customization.js').CustomizationState} custState
  */
-function _bindTextInputs(custState) {
+function _refreshCategoryUI(category, custState) {
+  document.querySelectorAll(`.topping-option-btn[data-category="${category}"]`).forEach((b) => {
+    b.classList.toggle('active', custState.isToppingActive(category, b.dataset.value));
+  });
+  if (category === 'fruits' || category === 'candles') {
+    _updateQuantityUI(category, custState);
+  }
+}
+
+/**
+ * Show/hide and update quantity stepper values for a category.
+ * @param {string} category - 'fruits' | 'candles'
+ * @param {import('./customization.js').CustomizationState} custState
+ */
+function _updateQuantityUI(category, custState) {
+  const qtyRow = document.querySelector(`.topping-qty-row[data-category="${category}"]`);
+  if (!qtyRow) return;
+  const active = custState.getTopping(category);
+  qtyRow.classList.toggle('visible', active !== null);
+  const input = qtyRow.querySelector('.topping-qty-input');
+  const qty   = custState.getToppingQuantity(category);
+  if (input) input.value = qty;
+  const min = parseInt(input?.getAttribute('min') || '1', 10);
+  const max = parseInt(input?.getAttribute('max') || '12', 10);
+  const decBtn = qtyRow.querySelector('[data-action="dec"]');
+  const incBtn = qtyRow.querySelector('[data-action="inc"]');
+  if (decBtn) decBtn.disabled = qty <= min;
+  if (incBtn) incBtn.disabled = qty >= max;
+}
+
+/**
+ * Update the topping count badge in the summary header.
+ * @param {import('./customization.js').CustomizationState} custState
+ */
+function _updateToppingCount(custState) {
+  const countEl = document.querySelector('.topping-count');
+  if (!countEl) return;
+  const n = custState.getToppingCount();
+  countEl.textContent = n > 0 ? `${n} active` : '';
+}
+
+/**
+ * Bind text input, font selector, and text color picker
+ * @param {import('./customization.js').CustomizationState} custState
+ * @param {import('./cake.js').CakeScene} cakeScene
+ */
+function _bindTextInputs(custState, cakeScene) {
   const textInput = document.getElementById('cakeText');
   if (textInput) {
     let debounceTimer = null;
     textInput.addEventListener('input', () => {
       clearTimeout(debounceTimer);
+      // Debounced — user may type quickly; rebuild once they pause
       debounceTimer = setTimeout(() => {
         custState.set('cakeText', textInput.value);
-      }, 300);
+        try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
+      }, 250);
     });
   }
 
@@ -155,6 +277,7 @@ function _bindTextInputs(custState) {
   if (fontSelect) {
     fontSelect.addEventListener('change', () => {
       custState.set('textFont', fontSelect.value);
+      try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
     });
   }
 
@@ -165,7 +288,8 @@ function _bindTextInputs(custState) {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         custState.set('textColor', textColor.value);
-      }, 100);
+        try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
+      }, 80);
     });
   }
 }
@@ -183,12 +307,7 @@ function _bindActionButtons(custState, cakeScene) {
         const state = custState.getState();
         const screenshot = cakeScene.takeScreenshot();
         const designs = JSON.parse(localStorage.getItem('arcake_designs') || '[]');
-        designs.push({
-          id: Date.now(),
-          date: new Date().toISOString(),
-          state,
-          screenshot
-        });
+        designs.push({ id: Date.now(), date: new Date().toISOString(), state, screenshot });
         localStorage.setItem('arcake_designs', JSON.stringify(designs));
         showToast('Design Saved!', 'success');
       } catch (err) {
@@ -220,7 +339,6 @@ function _bindActionButtons(custState, cakeScene) {
     btnReset.addEventListener('click', () => {
       custState.reset();
       _setInitialActiveStates(custState);
-      // Clear text input
       const textInput = document.getElementById('cakeText');
       if (textInput) textInput.value = '';
       showToast('Cake reset!', 'success');
@@ -229,19 +347,17 @@ function _bindActionButtons(custState, cakeScene) {
 }
 
 /**
- * Set initial active states on option buttons from state
+ * Set initial active states on all option buttons from state.
  * @param {import('./customization.js').CustomizationState} custState
  */
 function _setInitialActiveStates(custState) {
   const state = custState.getState();
 
-  // Single-select groups
-  const singleKeys = ['shape', 'size', 'flavor', 'frostingStyle'];
-  singleKeys.forEach((key) => {
+  // Single-select option groups (shape, size, flavor, frostingStyle)
+  ['shape', 'size', 'flavor', 'frostingStyle'].forEach((key) => {
     const group = document.querySelector(`.option-group[data-option="${key}"]`);
     if (!group) return;
-    const btns = group.querySelectorAll('.option-btn');
-    btns.forEach((btn) => {
+    group.querySelectorAll('.option-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.value === state[key]);
     });
   });
@@ -262,23 +378,23 @@ function _setInitialActiveStates(custState) {
     });
   }
 
-  // Toppings
-  const toppingBtns = document.querySelectorAll('.topping-tile');
+  // Toppings — one active per category
+  const toppingBtns = document.querySelectorAll('.topping-option-btn');
   toppingBtns.forEach((btn) => {
-    btn.classList.toggle('active', state.toppings.includes(btn.dataset.value));
+    const { category, value } = btn.dataset;
+    btn.classList.toggle('active', custState.isToppingActive(category, value));
   });
 
-  // Topping count
-  const countEl = document.querySelector('.topping-count');
-  if (countEl) {
-    countEl.textContent = `(${state.toppings.length}/5)`;
-  }
+  // Quantity steppers — initialise visibility + values
+  ['fruits', 'candles'].forEach((cat) => _updateQuantityUI(cat, custState));
+
+  _updateToppingCount(custState);
 }
 
 /**
- * Show a toast notification
+ * Show a toast notification.
  * @param {string} message
- * @param {string} [type=''] - 'success' | 'error' | ''
+ * @param {string} [type=''] - 'success' | 'error'
  */
 export function showToast(message, type = '') {
   const toast = document.getElementById('toast');
@@ -286,32 +402,24 @@ export function showToast(message, type = '') {
   toast.textContent = message;
   toast.className = 'toast';
   if (type) toast.classList.add(type);
-  // Force reflow
   void toast.offsetWidth;
   toast.classList.add('show');
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 2500);
+  setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
 /**
- * Initialize common UI (navbar toggle, scroll animations)
+ * Initialize common UI (navbar toggle, scroll animations, loading spinner).
  */
 export function initCommonUI() {
-  // Navbar toggle
   const toggle = document.getElementById('navToggle');
-  const menu = document.getElementById('navMenu');
+  const menu   = document.getElementById('navMenu');
   if (toggle && menu) {
-    toggle.addEventListener('click', () => {
-      menu.classList.toggle('open');
-    });
-    // Close on link click
+    toggle.addEventListener('click', () => menu.classList.toggle('open'));
     menu.querySelectorAll('a').forEach((a) => {
       a.addEventListener('click', () => menu.classList.remove('open'));
     });
   }
 
-  // Scroll fade-in animations
   const fadeEls = document.querySelectorAll('.fade-in');
   if (fadeEls.length > 0) {
     const observer = new IntersectionObserver(
@@ -328,9 +436,6 @@ export function initCommonUI() {
     fadeEls.forEach((el) => observer.observe(el));
   }
 
-  // Hide loading spinner
   const spinner = document.getElementById('loading');
-  if (spinner) {
-    setTimeout(() => spinner.classList.add('hidden'), 600);
-  }
+  if (spinner) setTimeout(() => spinner.classList.add('hidden'), 600);
 }

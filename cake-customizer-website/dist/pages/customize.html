@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Customize Your Cake - ARCake</title>
-  <script type="module" crossorigin src="../assets/main-EOTKkM8t.js"></script>
+  <script type="module" crossorigin src="../assets/main-00FlCCDv.js"></script>
   <link rel="stylesheet" crossorigin href="../assets/main-D6DOiFD_.css">
-  <link rel="stylesheet" crossorigin href="../assets/customize-C8jXACn-.css">
+  <link rel="stylesheet" crossorigin href="../assets/customize-4Ktevfey.css">
 </head>
 <body>
   <!-- Loading Spinner -->
@@ -193,64 +193,94 @@
       </details>
 
       <!-- Section 5: Toppings -->
-      <details class="panel-section">
+      <details class="panel-section" open>
         <summary class="section-header">
-          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><path d="M6.5 17a5.5 5.5 0 0 1 11 0"/><rect x="3" y="17" width="18" height="4" rx="2"/></svg>
           <span class="section-header-text">Toppings</span>
-          <span class="topping-count">(0/5)</span>
+          <span class="topping-count"></span>
           <svg class="section-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </summary>
         <div class="section-body">
-          <div class="topping-grid" data-option="toppings">
-            <button class="topping-tile" data-value="strawberries" title="Strawberries">
-              <span class="topping-tile-label">Strawberries</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="blueberries" title="Blueberries">
-              <span class="topping-tile-label">Blueberries</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="candles" title="Candles">
-              <span class="topping-tile-label">Candles</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="sprinkles" title="Sprinkles">
-              <span class="topping-tile-label">Sprinkles</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="chocolate_drip" title="Chocolate Drip">
-              <span class="topping-tile-label">Choco Drip</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="flowers" title="Flowers">
-              <span class="topping-tile-label">Flowers</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="macarons" title="Macarons">
-              <span class="topping-tile-label">Macarons</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="gold_dust" title="Gold Dust">
-              <span class="topping-tile-label">Gold Dust</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="sugar_pearls" title="Sugar Pearls">
-              <span class="topping-tile-label">Pearls</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="fresh_fruit" title="Fresh Fruit">
-              <span class="topping-tile-label">Fresh Fruit</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="ribbon" title="Ribbon">
-              <span class="topping-tile-label">Ribbon</span>
-              <span class="check-mark">✓</span>
-            </button>
-            <button class="topping-tile" data-value="fondant_figures" title="Fondant Figures">
-              <span class="topping-tile-label">Fondant</span>
-              <span class="check-mark">✓</span>
-            </button>
+          <div class="topping-groups">
+
+            <!-- Decorations: Sprinkles + Fruits + Extras combined -->
+            <div class="topping-group">
+              <div class="topping-group-header">
+                <span class="topping-group-label">Decorations</span>
+              </div>
+
+              <!-- Sprinkles -->
+              <div class="topping-subgroup">
+                <div class="topping-subgroup-header">
+                  <span class="topping-subgroup-label">Sprinkles</span>
+                  <button class="topping-clear-btn" data-category="sprinkles" type="button">Clear</button>
+                </div>
+                <div class="topping-options">
+                  <button class="topping-option-btn" data-category="sprinkles" data-value="rainbow" type="button">Rainbow</button>
+                  <button class="topping-option-btn" data-category="sprinkles" data-value="chocolate" type="button">Chocolate</button>
+                  <button class="topping-option-btn" data-category="sprinkles" data-value="star" type="button">Star</button>
+                </div>
+              </div>
+
+              <!-- Fruits -->
+              <div class="topping-subgroup">
+                <div class="topping-subgroup-header">
+                  <span class="topping-subgroup-label">Fruits</span>
+                  <button class="topping-clear-btn" data-category="fruits" type="button">Clear</button>
+                </div>
+                <div class="topping-options">
+                  <button class="topping-option-btn" data-category="fruits" data-value="blueberries" type="button">Blueberries</button>
+                  <button class="topping-option-btn" data-category="fruits" data-value="strawberries" type="button">Strawberries</button>
+                  <button class="topping-option-btn" data-category="fruits" data-value="cherries" type="button">Cherries</button>
+                  <button class="topping-option-btn" data-category="fruits" data-value="grapes" type="button">Grapes</button>
+                </div>
+                <div class="topping-qty-row" data-category="fruits">
+                  <span class="topping-qty-label">Quantity</span>
+                  <div class="topping-qty-controls">
+                    <button class="topping-qty-btn" data-category="fruits" data-action="dec" type="button">&#8722;</button>
+                    <input class="topping-qty-input" type="number" data-category="fruits" min="0" max="5" value="3">
+                    <button class="topping-qty-btn" data-category="fruits" data-action="inc" type="button">&#43;</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Extras -->
+              <div class="topping-subgroup">
+                <div class="topping-subgroup-header">
+                  <span class="topping-subgroup-label">Extras</span>
+                  <button class="topping-clear-btn" data-category="decorations" type="button">Clear</button>
+                </div>
+                <div class="topping-options">
+                  <button class="topping-option-btn" data-category="decorations" data-value="chocolate_pieces" type="button">Choc Shards</button>
+                  <button class="topping-option-btn" data-category="decorations" data-value="edible_flowers" type="button">Edible Flowers</button>
+                  <button class="topping-option-btn" data-category="decorations" data-value="custom_toppers" type="button">Star Toppers</button>
+                  <button class="topping-option-btn" data-category="decorations" data-value="macarons" type="button">Macarons</button>
+                  <button class="topping-option-btn" data-category="decorations" data-value="choc_drizzle" type="button">Choc Drizzle</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Candles -->
+            <div class="topping-group">
+              <div class="topping-group-header">
+                <span class="topping-group-label">Candles</span>
+                <button class="topping-clear-btn" data-category="candles" type="button">Clear</button>
+              </div>
+              <div class="topping-options">
+                <button class="topping-option-btn" data-category="candles" data-value="standard" type="button">Standard Candle</button>
+              </div>
+              <div class="topping-qty-row" data-category="candles">
+                <span class="topping-qty-label">Quantity</span>
+                <div class="topping-qty-controls">
+                  <button class="topping-qty-btn" data-category="candles" data-action="dec" type="button">&#8722;</button>
+                  <input class="topping-qty-input" type="number" data-category="candles" min="1" max="3" value="2">
+                  <button class="topping-qty-btn" data-category="candles" data-action="inc" type="button">&#43;</button>
+                </div>
+              </div>
+            </div>
+
           </div>
+          <p class="topping-rule-note">Decorations: pick one type (sprinkle, fruit, or extra). Candles are independent. Fruits and candles support quantity control.</p>
         </div>
       </details>
 
