@@ -45,6 +45,10 @@ export class ARPreview {
     this._pinch = { active: false, startDist: 0, startScale: 1 }
     this._scale = 1.0                   // current visual scale (0.4 – 3.5)
 
+    // Interaction mode: 'rotate' (default) | 'move'
+    // Toggle with the bottom-bar button — controls what 1-finger does
+    this._interactionMode = 'rotate'
+
     // Rotation state — 1-finger swipe rotates the 3D cake directly
     this._rotY      = 0       // current Y-axis rotation (radians)
     this._rotX      = 0       // current X-axis tilt   (radians, clamped ±0.55)
@@ -108,35 +112,71 @@ export class ARPreview {
       <button class="ar-top-btn" id="ar-shot-btn">Screenshot</button>
     `
 
-    // ── Floating hint ──
-    const hint = document.createElement('div')
-    hint.className = 'ar-hint'
-    hint.textContent = 'Swipe to rotate  ·  2-finger drag to move  ·  Pinch to resize'
+    // ── Floating hint (updated dynamically by _setMode) ──
+    this._hintEl = document.createElement('div')
+    this._hintEl.className = 'ar-hint'
 
-    // ── Bottom bar with Done button ──
+    // ── Bottom bar: mode toggle + Done ──
     const bottomBar = document.createElement('div')
     bottomBar.className = 'ar-bottom-bar'
     bottomBar.innerHTML = `
+      <button id="ar-mode-btn" style="
+        flex:0 0 auto;padding:10px 18px;border-radius:24px;
+        border:2px solid rgba(255,255,255,0.85);
+        background:rgba(0,0,0,0.45);color:#fff;
+        font-size:15px;font-weight:600;cursor:pointer;
+        backdrop-filter:blur(6px);
+      ">Move</button>
       <button class="sf-btn-primary" id="ar-done-btn"
-        style="flex:1;margin:0">Done</button>
+        style="flex:1;margin:0 0 0 10px">Done</button>
     `
 
     this._container.append(
       this._video,
       this._canvas,
       topBar,
-      hint,
+      this._hintEl,
       bottomBar
     )
     document.body.appendChild(this._container)
 
     // ── Button handlers ──
-    this._container.querySelector('#ar-edit-btn').onclick = () => this._close()
-    this._container.querySelector('#ar-done-btn').onclick = () => this._close()
-    this._container.querySelector('#ar-shot-btn').onclick = () => this._takeShot()
+    this._container.querySelector('#ar-edit-btn').onclick  = () => this._close()
+    this._container.querySelector('#ar-done-btn').onclick  = () => this._close()
+    this._container.querySelector('#ar-shot-btn').onclick  = () => this._takeShot()
+    this._container.querySelector('#ar-mode-btn').onclick  = () => {
+      this._setMode(this._interactionMode === 'rotate' ? 'move' : 'rotate')
+    }
+
+    // Initialise button label + hint
+    this._setMode('rotate')
 
     // ── Touch / mouse interaction ──
     this._attachInteraction()
+  }
+
+  /* ───────────────────────────────────────────────────────────
+     MODE TOGGLE
+     ─────────────────────────────────────────────────────────── */
+
+  /**
+   * Switches the 1-finger interaction mode between 'rotate' and 'move'.
+   * Updates the toggle button label and the floating hint accordingly.
+   */
+  _setMode(mode) {
+    this._interactionMode = mode
+    this._stopInertia()
+    this._rotActive   = false
+    this._drag.active = false
+
+    const btn = this._container && this._container.querySelector('#ar-mode-btn')
+    if (mode === 'move') {
+      if (btn) btn.textContent = 'Rotate'
+      if (this._hintEl) this._hintEl.textContent = 'Drag to move  ·  Pinch to resize'
+    } else {
+      if (btn) btn.textContent = 'Move'
+      if (this._hintEl) this._hintEl.textContent = 'Swipe to rotate  ·  Pinch to resize'
+    }
   }
 
   /* ───────────────────────────────────────────────────────────
@@ -254,14 +294,15 @@ export class ARPreview {
     el.addEventListener('mousedown', (e) => {
       e.preventDefault()
       this._stopInertia()
-      if (e.button === 2 || e.button === 1 || e.shiftKey) {
-        // Right / middle / shift+left → pan (reposition)
+      const isPan = e.button === 2 || e.button === 1 || e.shiftKey
+                    || this._interactionMode === 'move'
+      if (isPan) {
         _mousePan = true
         this._drag.active = true
         this._drag.startX = e.clientX - this._offset.x
         this._drag.startY = e.clientY - this._offset.y
       } else {
-        // Left → rotate
+        // rotate mode — left drag
         this._rotActive = true
         this._lastPtrX  = e.clientX
         this._lastPtrY  = e.clientY
@@ -310,13 +351,21 @@ export class ARPreview {
       this._stopInertia()
 
       if (e.touches.length === 1) {
-        // 1-finger → rotate
-        this._rotActive    = true
         this._pinch.active = false
-        this._drag.active  = false
-        this._lastPtrX = e.touches[0].clientX
-        this._lastPtrY = e.touches[0].clientY
-        this._velY = this._velX = 0
+        if (this._interactionMode === 'move') {
+          // 1-finger → drag / reposition
+          this._rotActive   = false
+          this._drag.active = true
+          this._drag.startX = e.touches[0].clientX - this._offset.x
+          this._drag.startY = e.touches[0].clientY - this._offset.y
+        } else {
+          // 1-finger → rotate
+          this._rotActive   = true
+          this._drag.active = false
+          this._lastPtrX = e.touches[0].clientX
+          this._lastPtrY = e.touches[0].clientY
+          this._velY = this._velX = 0
+        }
       } else if (e.touches.length === 2) {
         // 2-finger → pinch + pan
         this._rotActive        = false
@@ -331,16 +380,22 @@ export class ARPreview {
     }, { passive: true })
 
     el.addEventListener('touchmove', (e) => {
-      if (this._rotActive && e.touches.length === 1) {
-        const dx = e.touches[0].clientX - this._lastPtrX
-        const dy = e.touches[0].clientY - this._lastPtrY
-        this._velY   = dx * ROT_SENS
-        this._velX   = dy * ROT_SENS
-        this._rotY  += this._velY
-        this._rotX   = Math.max(-TILT_MAX, Math.min(TILT_MAX, this._rotX + this._velX))
-        this._lastPtrX = e.touches[0].clientX
-        this._lastPtrY = e.touches[0].clientY
-        this._applyRotation()
+      if (e.touches.length === 1) {
+        if (this._rotActive) {
+          const dx = e.touches[0].clientX - this._lastPtrX
+          const dy = e.touches[0].clientY - this._lastPtrY
+          this._velY   = dx * ROT_SENS
+          this._velX   = dy * ROT_SENS
+          this._rotY  += this._velY
+          this._rotX   = Math.max(-TILT_MAX, Math.min(TILT_MAX, this._rotX + this._velX))
+          this._lastPtrX = e.touches[0].clientX
+          this._lastPtrY = e.touches[0].clientY
+          this._applyRotation()
+        } else if (this._drag.active) {
+          this._offset.x = e.touches[0].clientX - this._drag.startX
+          this._offset.y = e.touches[0].clientY - this._drag.startY
+          this._applyTransform()
+        }
       }
 
       if (this._pinch.active && e.touches.length === 2) {
@@ -363,13 +418,20 @@ export class ARPreview {
         this._pinch.active = false
         this._drag.active  = false
       } else if (e.touches.length === 1) {
-        // One finger lifted during pinch — resume rotate
+        // One finger lifted during pinch — resume single-finger mode
         this._pinch.active = false
-        this._drag.active  = false
-        this._rotActive    = true
-        this._lastPtrX = e.touches[0].clientX
-        this._lastPtrY = e.touches[0].clientY
-        this._velY = this._velX = 0
+        if (this._interactionMode === 'move') {
+          this._rotActive   = false
+          this._drag.active = true
+          this._drag.startX = e.touches[0].clientX - this._offset.x
+          this._drag.startY = e.touches[0].clientY - this._offset.y
+        } else {
+          this._drag.active = false
+          this._rotActive   = true
+          this._lastPtrX = e.touches[0].clientX
+          this._lastPtrY = e.touches[0].clientY
+          this._velY = this._velX = 0
+        }
       }
     }, { passive: true })
   }
