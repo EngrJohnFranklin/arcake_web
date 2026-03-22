@@ -5,7 +5,6 @@
 
 import { CakeScanner } from './CakeScanner.js';
 import { ARPreview } from './ARPreview.js';
-import { showShapeScanPrompt } from './ShapeScanPrompt.js';
 
 /**
  * Initialize all UI bindings for the customizer page
@@ -58,18 +57,6 @@ function _bindOptionGroups(custState, cakeScene) {
     const buttons = group.querySelectorAll('.option-btn');
     buttons.forEach((btn) => {
       btn.addEventListener('click', () => {
-        if (optionKey === 'shape') {
-          // Intercept: offer scan-or-manual prompt before setting state
-          showShapeScanPrompt(btn.dataset.value, (finalShape) => {
-            buttons.forEach((b) => b.classList.remove('active'));
-            // Re-query the button that matches the final shape (may differ from clicked)
-            const activeBtn = group.querySelector(`.option-btn[data-value="${finalShape}"]`);
-            if (activeBtn) activeBtn.classList.add('active');
-            custState.set('shape', finalShape);
-            try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
-          });
-          return; // defer the rest of the handler to the prompt callback
-        }
         buttons.forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         custState.set(optionKey, btn.dataset.value);
