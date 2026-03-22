@@ -67,6 +67,8 @@ function _bindOptionGroups(custState, cakeScene) {
         buttons.forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         custState.set(optionKey, btn.dataset.value);
+        // Re-evaluate fruit quantity cap when shape changes
+        if (optionKey === 'shape') _updateQuantityUI('fruits', custState);
         // Immediate rebuild — no visible lag on shape/size/flavor/style change
         try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
       });
@@ -183,7 +185,9 @@ function _bindToppings(custState, cakeScene) {
       }
 
       const current = custState.getToppingQuantity(category);
-      const newQty  = action === 'inc' ? current + 1 : current - 1;
+      const shapeMax = category === 'fruits' ? _fruitMax(custState) : null;
+      let newQty = action === 'inc' ? current + 1 : current - 1;
+      if (shapeMax !== null) newQty = Math.min(newQty, shapeMax);
       custState.setToppingQuantity(category, newQty);
       _updateQuantityUI(category, custState);
 
@@ -220,6 +224,15 @@ function _bindToppings(custState, cakeScene) {
 }
 
 /**
+ * Return the per-shape max fruit quantity for the current state.
+ * square=8, heart=3, round/layered=5
+ */
+function _fruitMax(custState) {
+  const shape = custState.getState().shape;
+  return shape === 'square' ? 8 : shape === 'heart' ? 3 : 5;
+}
+
+/**
  * Refresh the active state of all buttons in a single category,
  * and update the quantity stepper if applicable.
  * @param {string} category
@@ -245,10 +258,21 @@ function _updateQuantityUI(category, custState) {
   const active = custState.getTopping(category);
   qtyRow.classList.toggle('visible', active !== null);
   const input = qtyRow.querySelector('.topping-qty-input');
-  const qty   = custState.getToppingQuantity(category);
-  if (input) input.value = qty;
+  let qty = custState.getToppingQuantity(category);
   const min = parseInt(input?.getAttribute('min') || '1', 10);
-  const max = parseInt(input?.getAttribute('max') || '12', 10);
+  const max = category === 'fruits' ? _fruitMax(custState)
+            : parseInt(input?.getAttribute('max') || '12', 10);
+
+  // Clamp stored qty to the current per-shape max
+  if (qty > max) {
+    qty = max;
+    custState.setToppingQuantity(category, qty);
+  }
+
+  if (input) {
+    input.value = qty;
+    input.max   = max;
+  }
   const decBtn = qtyRow.querySelector('[data-action="dec"]');
   const incBtn = qtyRow.querySelector('[data-action="inc"]');
   if (decBtn) decBtn.disabled = qty <= min;

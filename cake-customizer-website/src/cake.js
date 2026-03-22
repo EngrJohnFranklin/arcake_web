@@ -292,9 +292,7 @@ export class CakeScene {
     sponge.position.y = 0.4 * s;
     this.cakeGroup.add(sponge);
 
-    if (style === 'naked') {
-      this._addNakedLines(1.2 * s, 0.8 * s, 0, color, s);
-    } else {
+    if (style !== 'naked') {
       const frostMat = this._frostMat(frost, style);
       const frostTop = new THREE.Mesh(
         new THREE.CylinderGeometry(1.21 * s, 1.21 * s, 0.1 * s, 64),
@@ -342,7 +340,6 @@ export class CakeScene {
     this.cakeGroup.add(sponge);
 
     if (style === 'naked') {
-      this._addNakedLines(s, 0.80 * s, 0, color, s, true);
       this._cakeTopY   = 0.80 * s;
       this._cakeRadius = 1.00 * s;
       return;
@@ -418,10 +415,7 @@ export class CakeScene {
     sponge.renderOrder = 0;
     this.cakeGroup.add(sponge);
 
-    if (style === 'naked') {
-      // Heart naked lines use the heart radius for approximate ring placement
-      this._addNakedLines(s * HS * 1.1, H, 0, color, s);
-    } else {
+    if (style !== 'naked') {
       const frostMat = this._frostMat(frost, style);
 
       // ── Side shell ─────────────────────────────────────────────────────────
@@ -478,10 +472,7 @@ export class CakeScene {
     top.position.y = 0.75 * s;
     this.cakeGroup.add(top);
 
-    if (style === 'naked') {
-      this._addNakedLines(1.2 * s, 0.5 * s, 0, color, s);
-      this._addNakedLines(0.85 * s, 0.5 * s, 0.5 * s, color, s);
-    } else {
+    if (style !== 'naked') {
       const frostMat = this._frostMat(frost, style);
 
       // Frosting on bottom tier
@@ -1866,30 +1857,39 @@ export class CakeScene {
     const ctx = canvas.getContext('2d');
 
     let fontFamily = 'Georgia';
-    if (font === 'cursive') fontFamily = 'cursive';
-    else if (font === 'modern') fontFamily = 'Arial';
-
-    const label = text.substring(0, 30);
-
-    // Auto-fit: start large, shrink until text fits 90% of canvas width
-    let fontSize = 72;
-    const maxTextW = CANVAS_W * 0.9;
-    ctx.font = `bold ${fontSize}px ${fontFamily}`;
-    while (fontSize > 12 && ctx.measureText(label).width > maxTextW) {
-      fontSize -= 2;
-      ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    let fontWeight = 'bold';
+    if (font === 'cursive') {
+      fontFamily = '"Dancing Script", cursive';
+      fontWeight = '700';
+    } else if (font === 'modern') {
+      fontFamily = 'Arial';
     }
 
-    // Thin white outline for readability over any topping color
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.lineWidth = 6;
-    ctx.lineJoin = 'round';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.strokeText(label, CANVAS_W / 2, CANVAS_H / 2);
-    ctx.fillStyle = color || '#3D2B1F';
-    ctx.fillText(label, CANVAS_W / 2, CANVAS_H / 2);
+    const _draw = () => {
+      const label = text.substring(0, 30);
+
+      // Auto-fit: start large, shrink until text fits 90% of canvas width
+      let fontSize = 72;
+      const maxTextW = CANVAS_W * 0.9;
+      ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+      while (fontSize > 12 && ctx.measureText(label).width > maxTextW) {
+        fontSize -= 2;
+        ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+      }
+
+      // Thin white outline for readability over any topping color
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 6;
+      ctx.lineJoin = 'round';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeText(label, CANVAS_W / 2, CANVAS_H / 2);
+      ctx.fillStyle = color || '#3D2B1F';
+      ctx.fillText(label, CANVAS_W / 2, CANVAS_H / 2);
+
+      texture.needsUpdate = true;
+    };
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
@@ -1907,12 +1907,26 @@ export class CakeScene {
     mesh.renderOrder = 999;
 
     // Elevate text well above toppings so nothing clips through it
-    // Heart bevel adds ~0.08, toppings add ~0.04 clearance
     const surfaceOffset = (shape === 'heart') ? 0.12 : 0.06;
     const topY = (this._cakeTopY || 0.9 * s);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(0, topY + surfaceOffset, 0);
     this.toppingsGroup.add(mesh);
+
+    // Draw immediately with whatever font is available, then redraw once the
+    // cursive font is confirmed loaded (handles first-time font cache miss).
+    _draw();
+    if (font === 'cursive') {
+      // Ensure Dancing Script is loaded; inject link tag if needed
+      if (!document.getElementById('arcake-dancing-script')) {
+        const link = document.createElement('link');
+        link.id = 'arcake-dancing-script';
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap';
+        document.head.appendChild(link);
+      }
+      document.fonts.load(`700 72px "Dancing Script"`).then(() => _draw());
+    }
   }
 
   /** Clear all children from a group */

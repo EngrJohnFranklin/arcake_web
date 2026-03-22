@@ -57,7 +57,7 @@ const EMPTY_TOPPINGS = {
  * fruits min=0 so the user can select a type without placing any.
  */
 export const QTY_LIMITS = {
-  fruits:  { min: 0, max: 5,  default: 3 },
+  fruits:  { min: 0, max: 8,  default: 3 },
   candles: { min: 1, max: 3,  default: 2 },
 };
 
