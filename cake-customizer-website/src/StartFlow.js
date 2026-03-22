@@ -153,8 +153,7 @@ function _openScanner(onComplete) {
   try {
     scanner = new CakeScanner({
       onDetected: (shape) => {
-        if (!shape) { onComplete('round'); return }
-        _showConfirmCard(shape, onComplete)
+        onComplete(shape && ['round', 'square', 'heart', 'layered'].includes(shape) ? shape : 'round')
       },
       onError: () => { onComplete('round') }
     })

@@ -57,6 +57,13 @@ function _bindOptionGroups(custState, cakeScene) {
     const buttons = group.querySelectorAll('.option-btn');
     buttons.forEach((btn) => {
       btn.addEventListener('click', () => {
+        // Frosting style is toggleable — clicking the active button removes frosting (naked)
+        if (optionKey === 'frostingStyle' && btn.classList.contains('active')) {
+          buttons.forEach((b) => b.classList.remove('active'));
+          custState.set('frostingStyle', 'naked');
+          try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
+          return;
+        }
         buttons.forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         custState.set(optionKey, btn.dataset.value);

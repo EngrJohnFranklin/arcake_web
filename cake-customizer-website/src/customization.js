@@ -72,7 +72,7 @@ const DEFAULT_STATE = {
   shape:           'round',
   size:            'medium',
   flavor:          'vanilla',
-  frostingStyle:   'smooth',
+  frostingStyle:   'naked',
   frostingColor:   '#FFFFFF',
   toppings:        { ...EMPTY_TOPPINGS },
   toppingQuantity: { ...DEFAULT_QTY },
