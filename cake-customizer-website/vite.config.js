@@ -10,8 +10,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        customize: resolve(__dirname, 'pages/customize.html'),
-        gallery: resolve(__dirname, 'pages/gallery.html')
+        customize: resolve(__dirname, 'pages/customize.html')
       }
     }
   },

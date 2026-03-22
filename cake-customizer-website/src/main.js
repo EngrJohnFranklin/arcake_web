@@ -19,8 +19,6 @@ async function init() {
 
   if (path.includes('customize')) {
     await initCustomizePage();
-  } else if (path.includes('gallery')) {
-    await initGalleryPage();
   } else {
     await initHomePage();
   }
@@ -97,20 +95,6 @@ async function initCustomizePage() {
     console.log('[ARCake] Customizer initialized');
   } catch (err) {
     console.error('[ARCake] Error initializing customizer:', err);
-  }
-}
-
-/**
- * Initialize the gallery page
- */
-async function initGalleryPage() {
-  console.log('[ARCake] Gallery page');
-  try {
-    const { initGallery } = await import('./gallery.js');
-    initGallery();
-    console.log('[ARCake] Gallery initialized');
-  } catch (err) {
-    console.error('[ARCake] Error initializing gallery:', err);
   }
 }
 

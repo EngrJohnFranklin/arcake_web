@@ -226,9 +226,15 @@ export class CakeScanner {
    *
    * Pipeline:
    *   A) Grayscale conversion
-   *   B) Sobel edge detection
+   *   B) Sobel edge detection (adaptive threshold)
    *   C) Bounding-box extraction
-   *   D) Rule-based classification (layered → square → heart → round)
+   *   D) Straight-line ratio via horizontal/vertical edge scan
+   *   E) Rule-based classification (layered → square → heart → round)
+   *
+   * Key fix: square detection now uses the ratio of straight (axis-aligned)
+   * edge pixels to total edge pixels instead of corner-proximity counts.
+   * Straight edges dominate in square/rectangular cakes; curved edges
+   * dominate in round ones. This is far more reliable with real camera input.
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} w - Canvas width in pixels
@@ -247,13 +253,13 @@ export class CakeScanner {
         0.299 * data[base] + 0.587 * data[base + 1] + 0.114 * data[base + 2];
     }
 
-    // ── STEP B: Sobel edge detection ───────────────────────────
-    const edges = new Uint8Array(w * h);
-    const EDGE_THRESHOLD = 30;
+    // ── STEP B: Sobel edge detection with adaptive threshold ───
+    // Compute gradient magnitudes first so we can pick a percentile threshold.
+    const mag = new Float32Array(w * h);
+    let maxMag = 0;
 
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
-        // Fetch 3×3 neighbourhood
         const tl = gray[(y - 1) * w + (x - 1)];
         const tm = gray[(y - 1) * w + x];
         const tr = gray[(y - 1) * w + (x + 1)];
@@ -265,18 +271,44 @@ export class CakeScanner {
 
         const gx = -tl + tr - 2 * ml + 2 * mr - bl + br;
         const gy = -tl - 2 * tm - tr + bl + 2 * bm + br;
+        const m = Math.sqrt(gx * gx + gy * gy);
+        mag[y * w + x] = m;
+        if (m > maxMag) maxMag = m;
 
-        edges[y * w + x] =
-          Math.sqrt(gx * gx + gy * gy) > EDGE_THRESHOLD ? 255 : 0;
+        // Also store gradient direction (0=H, 1=V, 2=diagonal)
+        // We'll use it in step D below — stash as a property on mag lazily.
       }
     }
 
-    // ── STEP C: Bounding box ───────────────────────────────────
-    let minX = w;
-    let maxX = 0;
-    let minY = h;
-    let maxY = 0;
-    let edgeCount = 0;
+    // Adaptive threshold: 20 % of peak magnitude (min 20, max 80).
+    const EDGE_THRESHOLD = Math.min(80, Math.max(20, maxMag * 0.20));
+
+    const edges = new Uint8Array(w * h);
+    // gx/gy stored separately for the straight-line test
+    const gxArr = new Int16Array(w * h);
+    const gyArr = new Int16Array(w * h);
+
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        if (mag[y * w + x] > EDGE_THRESHOLD) {
+          edges[y * w + x] = 255;
+
+          const tl = gray[(y - 1) * w + (x - 1)];
+          const tr = gray[(y - 1) * w + (x + 1)];
+          const ml = gray[y * w + (x - 1)];
+          const mr = gray[y * w + (x + 1)];
+          const bl = gray[(y + 1) * w + (x - 1)];
+          const bm = gray[(y + 1) * w + x];
+          const tm = gray[(y - 1) * w + x];
+          const br = gray[(y + 1) * w + (x + 1)];
+          gxArr[y * w + x] = -tl + tr - 2 * ml + 2 * mr - bl + br;
+          gyArr[y * w + x] = -tl - 2 * tm - tr + bl + 2 * bm + br;
+        }
+      }
+    }
+
+    // ── STEP C: Bounding box & edge count ─────────────────────
+    let minX = w, maxX = 0, minY = h, maxY = 0, edgeCount = 0;
 
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
@@ -290,57 +322,53 @@ export class CakeScanner {
       }
     }
 
-    // Not enough edge signal → no detectable object
-    if (edgeCount < 500) return null;
+    // Not enough edge signal → nothing detected
+    if (edgeCount < 200) return null;
 
     const bboxW = maxX - minX;
     const bboxH = maxY - minY;
-
-    if (bboxW < 60 || bboxH < 60) return null;
+    if (bboxW < 50 || bboxH < 50) return null;
 
     const aspectRatio = bboxW / bboxH;
 
-    // ── STEP D: Classification rules ───────────────────────────
+    // ── STEP D: Straight-edge ratio ────────────────────────────
+    // An edge pixel is "straight" (horizontal or vertical) when its gradient
+    // direction is strongly axis-aligned: |gx| >> |gy|  (vertical boundary)
+    // or |gy| >> |gx|  (horizontal boundary).
+    // A round cake produces mostly diagonal/oblique gradients around the
+    // circumference; a square cake produces long runs of purely H or V edges
+    // along its flat sides.
+    let straightEdges = 0;
 
-    // Rule 1 — LAYERED (taller than wide)
-    if (bboxH > bboxW * 1.35) return 'layered';
-
-    // Rule 2 — Corner density (shared by SQUARE and HEART rules)
-    const cornerSize = Math.min(bboxW, bboxH) * 0.18;
-    const corners = [
-      { cx: minX, cy: minY },
-      { cx: maxX, cy: minY },
-      { cx: minX, cy: maxY },
-      { cx: maxX, cy: maxY },
-    ];
-
-    let cornerEdges = 0;
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         if (edges[y * w + x] !== 255) continue;
-        for (let c = 0; c < 4; c++) {
-          const dx = x - corners[c].cx;
-          const dy = y - corners[c].cy;
-          if (Math.sqrt(dx * dx + dy * dy) <= cornerSize) {
-            cornerEdges++;
-            break; // Count pixel only once even if near multiple corners
-          }
-        }
+        const ax = Math.abs(gxArr[y * w + x]);
+        const ay = Math.abs(gyArr[y * w + x]);
+        // "Straight" = one axis at least 2.5× stronger than the other
+        if (ax > ay * 2.5 || ay > ax * 2.5) straightEdges++;
       }
     }
 
-    const cornerRatio = cornerEdges / edgeCount;
+    const straightRatio = straightEdges / edgeCount;
 
-    // Rule 3 — SQUARE (roughly 1:1 aspect + dense corner edges)
-    if (aspectRatio >= 0.82 && aspectRatio <= 1.22 && cornerRatio > 0.18) {
+    // ── STEP E: Classification ─────────────────────────────────
+
+    // Rule 1 — LAYERED: significantly taller than wide (side-on view)
+    if (bboxH > bboxW * 1.4) return 'layered';
+
+    // Rule 2 — SQUARE: near-square aspect AND high straight-edge ratio.
+    // Thresholds tuned for real-world overhead/angled cake photos.
+    // straightRatio > 0.42 means most edges run H or V — typical of squares.
+    if (aspectRatio >= 0.75 && aspectRatio <= 1.35 && straightRatio > 0.42) {
       return 'square';
     }
 
-    // Rule 4 — HEART (near-square aspect + top-centre cleft dip)
-    if (aspectRatio >= 0.75 && aspectRatio <= 1.35) {
-      const topBand = Math.floor(bboxH * 0.22);
-      const midLeft = Math.floor(minX + bboxW * 0.35);
-      const midRight = Math.floor(minX + bboxW * 0.65);
+    // Rule 3 — HEART: near-square aspect + top-centre cleft depression
+    if (aspectRatio >= 0.75 && aspectRatio <= 1.4) {
+      const topBand = Math.max(4, Math.floor(bboxH * 0.20));
+      const midLeft  = Math.floor(minX + bboxW * 0.33);
+      const midRight = Math.floor(minX + bboxW * 0.67);
 
       let cleftEdges = 0;
       for (let y = minY; y < minY + topBand; y++) {
@@ -349,11 +377,11 @@ export class CakeScanner {
         }
       }
 
-      const topCentreRatio = cleftEdges / (topBand * (midRight - midLeft));
-      if (topCentreRatio < 0.04) return 'heart';
+      const area = topBand * (midRight - midLeft + 1);
+      if (area > 0 && cleftEdges / area < 0.035) return 'heart';
     }
 
-    // Rule 5 — ROUND (default fallback)
+    // Rule 4 — ROUND (default for anything not caught above)
     return 'round';
   }
 
@@ -403,82 +431,146 @@ export class CakeScanner {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // CONFIRMATION CARD
+  // AR PREVIEW SCREEN
   // ─────────────────────────────────────────────────────────────
 
   /**
-   * Slides up a bottom-sheet confirmation card with shape SVG, copy,
-   * and two action buttons (confirm / rescan).
+   * After shape detection, keeps the live camera feed visible and
+   * overlays a transparent Three.js canvas so the 3D cake floats
+   * in the real-world environment (true AR preview).
+   *
+   * UI elements (badge, shape name, buttons) sit on top of the
+   * cake canvas as a pointer-events overlay.
    *
    * @param {'round'|'square'|'heart'|'layered'} shape
    */
-  _showConfirmCard(shape) {
-    const svgMap = {
-      round: `<circle cx="36" cy="36" r="26"
-        fill="none" stroke="#E91E8C" stroke-width="3"/>`,
-      square: `<rect x="10" y="10" width="52" height="52" rx="6"
-        fill="none" stroke="#E91E8C" stroke-width="3"/>`,
-      heart: `<path d="M36 58C10 40 6 14 20 10C28 8 36 18 36 18
-               C36 18 44 8 52 10C66 14 62 40 36 58Z"
-        fill="none" stroke="#E91E8C" stroke-width="3"/>`,
-      layered: `<ellipse cx="36" cy="50" rx="26" ry="11"
-        fill="none" stroke="#E91E8C" stroke-width="2.5"/>
-      <ellipse cx="36" cy="28" rx="18" ry="9"
-        fill="none" stroke="#E91E8C" stroke-width="2.5"/>`,
+  async _showConfirmCard(shape) {
+    const names = { round: 'Round', square: 'Square', heart: 'Heart', layered: 'Layered' };
+    const shapeName = names[shape] ?? shape;
+
+    // ── Hide scanner UI elements; camera feed stays ────────────
+    this._finder.style.display = 'none';
+    this._statusLabel.style.display = 'none';
+
+    // ── Fullscreen transparent Three.js canvas ─────────────────
+    const arCanvas = document.createElement('canvas');
+    arCanvas.width  = window.innerWidth;
+    arCanvas.height = window.innerHeight;
+    arCanvas.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
+    this._container.appendChild(arCanvas);
+
+    // ── UI overlay (on top of AR canvas) ──────────────────────
+    const overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:absolute;inset:0;display:flex;flex-direction:column;' +
+      'align-items:center;justify-content:flex-end;padding-bottom:40px;' +
+      'pointer-events:none;';
+
+    // Shape label at top-centre
+    const topLabel = document.createElement('div');
+    topLabel.style.cssText =
+      'position:absolute;top:22px;left:50%;transform:translateX(-50%);' +
+      'display:flex;flex-direction:column;align-items:center;gap:6px;';
+
+    const badge = document.createElement('div');
+    badge.textContent = '✓  Shape Detected';
+    badge.style.cssText =
+      'background:rgba(76,175,80,0.22);color:#A5D6A7;' +
+      'border:1px solid rgba(76,175,80,0.5);backdrop-filter:blur(8px);' +
+      'font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;' +
+      'padding:5px 14px;border-radius:50px;';
+    topLabel.appendChild(badge);
+
+    const nameTag = document.createElement('div');
+    nameTag.textContent = `${shapeName} Cake`;
+    nameTag.style.cssText =
+      'color:#fff;font-size:20px;font-weight:700;' +
+      'text-shadow:0 2px 12px rgba(0,0,0,0.6);letter-spacing:-0.2px;';
+    topLabel.appendChild(nameTag);
+
+    overlay.appendChild(topLabel);
+
+    // Bottom action buttons
+    const btnWrap = document.createElement('div');
+    btnWrap.style.cssText =
+      'display:flex;flex-direction:column;gap:10px;' +
+      'width:calc(100% - 40px);max-width:360px;pointer-events:auto;';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = 'Customize This Cake  →';
+    confirmBtn.style.cssText =
+      'padding:16px;background:linear-gradient(135deg,#E91E8C,#C2185B);color:#fff;' +
+      'border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;' +
+      'box-shadow:0 6px 28px rgba(233,30,140,0.5);letter-spacing:0.2px;';
+
+    const rescanBtn = document.createElement('button');
+    rescanBtn.textContent = '↺  Scan Again';
+    rescanBtn.style.cssText =
+      'padding:13px;background:rgba(0,0,0,0.45);color:rgba(255,255,255,0.85);' +
+      'border:1px solid rgba(255,255,255,0.25);border-radius:14px;backdrop-filter:blur(8px);' +
+      'font-size:14px;font-weight:600;cursor:pointer;';
+
+    btnWrap.appendChild(confirmBtn);
+    btnWrap.appendChild(rescanBtn);
+    overlay.appendChild(btnWrap);
+
+    this._container.appendChild(overlay);
+
+    // ── Spin up 3D cake (transparent bg → camera shows through) ─
+    let previewScene = null;
+    try {
+      const { CakeScene } = await import('./cake.js');
+      previewScene = new CakeScene(arCanvas, {
+        autoRotate:  true,
+        interactive: false,
+        transparent: true,
+        float:       true,
+        rotateSpeed: 0.6,
+      });
+      previewScene.buildCake({
+        shape,
+        size:           'medium',
+        flavor:         'vanilla',
+        frostingStyle:  'smooth',
+        frostingColor:  '#FFFFFF',
+        toppings:       { sprinkles: null, fruits: null, candles: null, decorations: null },
+        toppingQuantity:{ fruits: 3, candles: 2 },
+        cakeText:       '',
+        textFont:       'classic',
+        textColor:      '#3D2B1F',
+        boardColor:     '#8D6E63',
+      });
+    } catch (_) {
+      // 3D init failed — buttons still work
+    }
+
+    // ── Resize: keep AR canvas synced to viewport ──────────────
+    const onResize = () => {
+      arCanvas.width  = window.innerWidth;
+      arCanvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', onResize);
+
+    // ── Button handlers ────────────────────────────────────────
+    const _cleanup = () => {
+      window.removeEventListener('resize', onResize);
+      if (previewScene) previewScene.dispose?.();
+      arCanvas.remove();
+      overlay.remove();
     };
 
-    const names = {
-      round: 'Round',
-      square: 'Square',
-      heart: 'Heart',
-      layered: 'Layered',
-    };
-
-    const shapeName = names[shape];
-    const svgInner = svgMap[shape];
-
-    const card = document.createElement('div');
-    card.style.cssText =
-      'position:absolute;bottom:0;left:0;right:0;' +
-      'background:#fff;border-radius:20px 20px 0 0;' +
-      'padding:28px 24px 40px;text-align:center;' +
-      'box-shadow:0 -4px 24px rgba(0,0,0,0.15);';
-
-    card.innerHTML = `
-      <svg width="72" height="72" viewBox="0 0 72 72"
-        xmlns="http://www.w3.org/2000/svg"
-        style="display:block;margin:0 auto 16px;">
-        ${svgInner}
-      </svg>
-      <p style="margin:0 0 6px;font-size:20px;font-weight:600;color:#1a1a1a">
-        We found a ${shapeName} cake
-      </p>
-      <p style="margin:0 0 24px;font-size:14px;color:#888">
-        This shape will be pre-selected in your customizer
-      </p>
-      <button id="cs-confirm" style="
-        display:block;width:100%;padding:14px;
-        background:#E91E8C;color:#fff;border:none;
-        border-radius:12px;font-size:16px;font-weight:600;
-        cursor:pointer;margin-bottom:10px">
-        Looks right!
-      </button>
-      <button id="cs-rescan" style="
-        display:block;width:100%;padding:12px;
-        background:transparent;color:#888;
-        border:1px solid #ddd;border-radius:12px;
-        font-size:15px;cursor:pointer">
-        Try again
-      </button>
-    `;
-
-    card.querySelector('#cs-confirm').addEventListener('click', () => {
+    confirmBtn.addEventListener('click', () => {
+      _cleanup();
       this.stop();
       this.onDetected(shape);
     });
 
-    card.querySelector('#cs-rescan').addEventListener('click', () => {
-      card.remove();
+    rescanBtn.addEventListener('click', () => {
+      _cleanup();
+      // Restore scanner UI
+      this._finder.style.display = '';
+      this._statusLabel.style.display = '';
       this._confirmed = false;
       this._lastShape = null;
       this._consecutiveHits = 0;
@@ -486,7 +578,5 @@ export class CakeScanner {
       this._statusLabel.textContent = 'Point camera at your cake';
       this._intervalId = setInterval(() => this._scanFrame(), 600);
     });
-
-    this._container.appendChild(card);
   }
 }
