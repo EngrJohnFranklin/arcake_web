@@ -45,6 +45,16 @@ export class ARPreview {
     this._pinch = { active: false, startDist: 0, startScale: 1 }
     this._scale = 1.0                   // current visual scale (0.4 – 3.5)
 
+    // Rotation state — 1-finger swipe rotates the 3D cake directly
+    this._rotY      = 0       // current Y-axis rotation (radians)
+    this._rotX      = 0       // current X-axis tilt   (radians, clamped ±0.55)
+    this._velY      = 0       // angular velocity Y for inertia
+    this._velX      = 0       // angular velocity X for inertia
+    this._rotActive = false   // true while a rotate gesture is live
+    this._lastPtrX  = 0       // previous pointer X for delta calc
+    this._lastPtrY  = 0       // previous pointer Y for delta calc
+    this._inertiaId = null    // RAF id for post-gesture inertia loop
+
     // Resize listener reference (stored so it can be removed on close)
     this._onResize = null
   }
@@ -101,7 +111,7 @@ export class ARPreview {
     // ── Floating hint ──
     const hint = document.createElement('div')
     hint.className = 'ar-hint'
-    hint.textContent = 'Drag to reposition  ·  Pinch to resize'
+    hint.textContent = 'Swipe to rotate  ·  2-finger drag to move  ·  Pinch to resize'
 
     // ── Bottom bar with Done button ──
     const bottomBar = document.createElement('div')
@@ -172,11 +182,10 @@ export class ARPreview {
 
     // transparent:true → WebGL alpha channel → video shows through
     this._cakeScene = new CakeScene(this._canvas, {
-      autoRotate:  true,
+      autoRotate:  false,   // user controls rotation via swipe
       interactive: false,
       transparent: true,
       float:       true,
-      rotateSpeed: 0.8,
     })
 
     this._cakeScene.buildCake(this._state)
@@ -221,65 +230,192 @@ export class ARPreview {
      ─────────────────────────────────────────────────────────── */
 
   /**
-   * Attaches mouse drag (desktop) and touch drag + pinch-zoom (mobile)
-   * event listeners to the Three.js canvas.
+   * Attaches all interaction:
+   *   Touch 1-finger swipe  → rotate the 3D cake (Y + clamped X tilt)
+   *   Touch 2-finger pinch  → scale
+   *   Touch 2-finger pan    → reposition cake in AR space
+   *   Mouse left drag       → rotate
+   *   Mouse wheel           → scale
+   *   Mouse right / Shift   → reposition
    */
   _attachInteraction() {
     const el = this._canvas
+    const ROT_SENS = 0.006   // radians per pixel
+    const TILT_MAX = 0.55    // max X tilt in radians
 
-    // ── Mouse drag ──────────────────────────────────────────
+    const mid2 = (t) => ({
+      x: (t[0].clientX + t[1].clientX) / 2,
+      y: (t[0].clientY + t[1].clientY) / 2,
+    })
+
+    // ── Mouse ────────────────────────────────────────────────
+    let _mousePan = false
+
     el.addEventListener('mousedown', (e) => {
-      this._drag.active = true
-      this._drag.startX = e.clientX - this._offset.x
-      this._drag.startY = e.clientY - this._offset.y
+      e.preventDefault()
+      this._stopInertia()
+      if (e.button === 2 || e.button === 1 || e.shiftKey) {
+        // Right / middle / shift+left → pan (reposition)
+        _mousePan = true
+        this._drag.active = true
+        this._drag.startX = e.clientX - this._offset.x
+        this._drag.startY = e.clientY - this._offset.y
+      } else {
+        // Left → rotate
+        this._rotActive = true
+        this._lastPtrX  = e.clientX
+        this._lastPtrY  = e.clientY
+        this._velY = this._velX = 0
+      }
     })
 
     window.addEventListener('mousemove', (e) => {
-      if (!this._drag.active) return
-      this._offset.x = e.clientX - this._drag.startX
-      this._offset.y = e.clientY - this._drag.startY
-      this._applyTransform()
+      if (_mousePan && this._drag.active) {
+        this._offset.x = e.clientX - this._drag.startX
+        this._offset.y = e.clientY - this._drag.startY
+        this._applyTransform()
+      } else if (this._rotActive) {
+        const dx = e.clientX - this._lastPtrX
+        const dy = e.clientY - this._lastPtrY
+        this._velY   = dx * ROT_SENS
+        this._velX   = dy * ROT_SENS
+        this._rotY  += this._velY
+        this._rotX   = Math.max(-TILT_MAX, Math.min(TILT_MAX, this._rotX + this._velX))
+        this._lastPtrX = e.clientX
+        this._lastPtrY = e.clientY
+        this._applyRotation()
+      }
     })
 
     window.addEventListener('mouseup', () => {
+      if (this._rotActive) this._startInertia()
+      this._rotActive   = false
       this._drag.active = false
+      _mousePan = false
     })
 
-    // ── Touch drag + pinch zoom ──────────────────────────────
+    // Scroll wheel → scale
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault()
+      const factor = e.deltaY > 0 ? 0.92 : 1.08
+      this._scale = Math.min(3.5, Math.max(0.4, this._scale * factor))
+      this._applyTransform()
+    }, { passive: false })
+
+    // Suppress context menu (right-click used for pan)
+    el.addEventListener('contextmenu', (e) => e.preventDefault())
+
+    // ── Touch ────────────────────────────────────────────────
     el.addEventListener('touchstart', (e) => {
+      this._stopInertia()
+
       if (e.touches.length === 1) {
-        this._drag.active = true
-        this._drag.startX = e.touches[0].clientX - this._offset.x
-        this._drag.startY = e.touches[0].clientY - this._offset.y
-      }
-      if (e.touches.length === 2) {
-        this._drag.active      = false
+        // 1-finger → rotate
+        this._rotActive    = true
+        this._pinch.active = false
+        this._drag.active  = false
+        this._lastPtrX = e.touches[0].clientX
+        this._lastPtrY = e.touches[0].clientY
+        this._velY = this._velX = 0
+      } else if (e.touches.length === 2) {
+        // 2-finger → pinch + pan
+        this._rotActive        = false
         this._pinch.active     = true
+        this._drag.active      = true
         this._pinch.startDist  = _touchDist(e.touches)
         this._pinch.startScale = this._scale
+        const m = mid2(e.touches)
+        this._drag.startX = m.x - this._offset.x
+        this._drag.startY = m.y - this._offset.y
       }
     }, { passive: true })
 
     el.addEventListener('touchmove', (e) => {
-      if (this._drag.active && e.touches.length === 1) {
-        this._offset.x = e.touches[0].clientX - this._drag.startX
-        this._offset.y = e.touches[0].clientY - this._drag.startY
-        this._applyTransform()
+      if (this._rotActive && e.touches.length === 1) {
+        const dx = e.touches[0].clientX - this._lastPtrX
+        const dy = e.touches[0].clientY - this._lastPtrY
+        this._velY   = dx * ROT_SENS
+        this._velX   = dy * ROT_SENS
+        this._rotY  += this._velY
+        this._rotX   = Math.max(-TILT_MAX, Math.min(TILT_MAX, this._rotX + this._velX))
+        this._lastPtrX = e.touches[0].clientX
+        this._lastPtrY = e.touches[0].clientY
+        this._applyRotation()
       }
+
       if (this._pinch.active && e.touches.length === 2) {
+        // Scale
         const dist  = _touchDist(e.touches)
-        const ratio = dist / this._pinch.startDist
-        // Clamp scale to sensible range
         this._scale = Math.min(3.5, Math.max(0.4,
-          this._pinch.startScale * ratio))
+          this._pinch.startScale * (dist / this._pinch.startDist)))
+        // Pan (follow midpoint)
+        const m = mid2(e.touches)
+        this._offset.x = m.x - this._drag.startX
+        this._offset.y = m.y - this._drag.startY
         this._applyTransform()
       }
     }, { passive: true })
 
-    el.addEventListener('touchend', () => {
-      this._drag.active  = false
-      this._pinch.active = false
-    })
+    el.addEventListener('touchend', (e) => {
+      if (e.touches.length === 0) {
+        if (this._rotActive) this._startInertia()
+        this._rotActive    = false
+        this._pinch.active = false
+        this._drag.active  = false
+      } else if (e.touches.length === 1) {
+        // One finger lifted during pinch — resume rotate
+        this._pinch.active = false
+        this._drag.active  = false
+        this._rotActive    = true
+        this._lastPtrX = e.touches[0].clientX
+        this._lastPtrY = e.touches[0].clientY
+        this._velY = this._velX = 0
+      }
+    }, { passive: true })
+  }
+
+  /* ───────────────────────────────────────────────────────────
+     3D ROTATION
+     ─────────────────────────────────────────────────────────── */
+
+  /** Applies accumulated rotation angles to both cake groups. */
+  _applyRotation() {
+    if (!this._cakeScene) return
+    this._cakeScene.cakeGroup.rotation.y     = this._rotY
+    this._cakeScene.toppingsGroup.rotation.y = this._rotY
+    this._cakeScene.cakeGroup.rotation.x     = this._rotX
+    this._cakeScene.toppingsGroup.rotation.x = this._rotX
+  }
+
+  /**
+   * Starts an inertia loop that decays rotational velocity after
+   * the user lifts their finger, giving a natural spin-down feel.
+   */
+  _startInertia() {
+    this._stopInertia()
+    const DECAY   = 0.88
+    const MIN_VEL = 0.0003
+    const tick = () => {
+      this._velY *= DECAY
+      this._velX *= DECAY
+      if (Math.abs(this._velY) < MIN_VEL && Math.abs(this._velX) < MIN_VEL) {
+        this._stopInertia()
+        return
+      }
+      this._rotY += this._velY
+      this._rotX  = Math.max(-0.55, Math.min(0.55, this._rotX + this._velX))
+      this._applyRotation()
+      this._inertiaId = requestAnimationFrame(tick)
+    }
+    this._inertiaId = requestAnimationFrame(tick)
+  }
+
+  /** Cancels any running inertia animation. */
+  _stopInertia() {
+    if (this._inertiaId !== null) {
+      cancelAnimationFrame(this._inertiaId)
+      this._inertiaId = null
+    }
   }
 
   /* ───────────────────────────────────────────────────────────
@@ -335,6 +471,9 @@ export class ARPreview {
    * removes the DOM overlay, and invokes the onBack callback.
    */
   _close() {
+    // Stop inertia animation
+    this._stopInertia()
+
     // Stop listening for resize
     if (this._onResize) {
       window.removeEventListener('resize', this._onResize)

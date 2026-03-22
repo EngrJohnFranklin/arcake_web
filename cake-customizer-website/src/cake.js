@@ -828,9 +828,10 @@ export class CakeScene {
     const usableR = (this._cakeRadius || 1.0 * s) * 0.82;
     // For square cakes the usable half-side is slightly smaller than usableR
     const halfW   = (shape === 'square') ? s * 0.88 : usableR;
-    // Centre exclusion zone when text is present
-    const minR    = hasText ? usableR * 0.46 : 0;
-    const ctx     = { topY, usableR, halfW, minR, shape, s };
+    // Centre exclusion zone when text is present.
+    // Heart handles text avoidance internally via parametric curve filtering.
+    const minR    = (hasText && shape !== 'heart') ? usableR * 0.46 : 0;
+    const ctx     = { topY, usableR, halfW, minR, shape, s, hasText };
 
     // Shared collision registry — prevents cross-category overlap
     const occupied = [];
@@ -1337,7 +1338,7 @@ export class CakeScene {
     if (shape === 'square') {
       positions = this._squareGridPositions(count, halfW, minR);
     } else if (shape === 'heart') {
-      positions = this._heartSurfacePositions(count, usableR, minR, outerFrac);
+      positions = this._heartSurfacePositions(count, usableR, minR, outerFrac, ctx);
     } else {
       // round / layered → adaptive concentric rings
       positions = this._concentricRingPositions(count, usableR, minR, outerFrac, startAngle);
@@ -1430,59 +1431,60 @@ export class CakeScene {
   }
 
   /**
-   * Heart-contour following positions.
-   * Uses a bilateral-symmetric polar parameterisation, with strict boundary
-   * validation to ensure NO overflow from the heart shape.
+   * Heart-surface fruit positions — parametric perimeter following.
+   *
+   * All fruits are placed along the inside edge of the heart outline.
+   * 720 candidate points are sampled around the full parametric heart curve
+   * at EDGE_SCALE (≈ 88 % of boundary → visually at the edge, safely inside).
+   * When custom text is present the horizontal text band around z = 0 is
+   * excluded from candidates so fruits are pushed to the upper/lower arcs
+   * where they remain fully visible over the text.
+   *
+   * `count` evenly-spaced points are then picked from the valid candidate pool.
+   *
+   * Coordinate system (same as _isWithinHeartCurve):
+   *   theta = 0      → lower tip   (z > 0, x = 0)
+   *   theta = PI/2   → right lobe  (x max, z ≈ 0)
+   *   theta = PI     → top cleft   (z < 0, x = 0)
+   *   theta = 3PI/2  → left lobe   (x min, z ≈ 0)
    */
-  _heartSurfacePositions(count, usableR, minR, frac = 0.80) {
-    const hw = usableR * frac * 0.80; // Reduced from 0.86 for strict containment
+  _heartSurfacePositions(count, usableR, minR, frac = 0.80, ctx = {}) {
+    const hasText = !!(ctx && ctx.hasText);
 
-    // Helper: generate N positions along a heart contour at a given scale
-    const heartRing = (n, scale, startOffset = 0) => {
-      const pts = [];
-      for (let i = 0; i < n; i++) {
-        const t  = (i + 0.5 + startOffset) / n;
-        const th = t * Math.PI * 2;
-        const heartFactor = 0.62 + 0.24 * Math.cos(th * 2 + Math.PI)
-                                 - 0.08 * Math.abs(Math.sin(th));
-        const r = hw * scale * Math.max(0.32, heartFactor);
-        const x = Math.sin(th) * r;
-        const z = Math.cos(th) * r * 0.70;
-        const dist = Math.sqrt(x * x + z * z);
-        if (dist >= minR && this._isWithinHeartCurve(x, z, hw * 0.95)) {
-          pts.push({ x, z });
-        }
-      }
-      return pts;
+    // EDGE_SCALE = 0.88 → fruits sit at the visual inner-edge of the heart.
+    // Validation (margin 0.04) accepts anything at scale ≤ 0.96, so 0.88 is safe.
+    const EDGE_SCALE = 0.88;
+    const heartPoint = (theta) => {
+      const hf = 0.62 + 0.24 * Math.cos(theta * 2 + Math.PI)
+                      - 0.08 * Math.abs(Math.sin(theta));
+      const r  = usableR * EDGE_SCALE * Math.max(0.32, hf);
+      return { x: Math.sin(theta) * r, z: Math.cos(theta) * r * 0.70 };
     };
 
-    let positions;
-    if (count <= 8) {
-      // Single contour band
-      positions = heartRing(count, 1.0);
-    } else {
-      // Dual-band: outer ~60 %, inner ~40 % with staggered offset
-      const outerCount = Math.ceil(count * 0.6);
-      const innerCount = count - outerCount;
-      positions = [
-        ...heartRing(outerCount, 1.0),
-        ...heartRing(innerCount, 0.55, 0.25)
-      ];
+    // Text label spans z ± TZ at the centre of the cake top.
+    // planeH = cakeRadius * 0.48; font ~ 60 % of canvas height
+    // → z-half ≈ 0.197 * usableR; +10 % safety → 0.22 * usableR.
+    const TZ = hasText ? usableR * 0.22 : 0;
+
+    // Dense perimeter sample — filter text band when needed
+    const NUM = 720;
+    const pool = [];
+    for (let i = 0; i < NUM; i++) {
+      const theta = (i / NUM) * Math.PI * 2;
+      const p = heartPoint(theta);
+      if (hasText && Math.abs(p.z) < TZ) continue;   // skip text horizontal band
+      pool.push(p);
     }
 
-    // Fallback: symmetric inner positions
-    let fallback = 0;
-    while (positions.length < count && fallback < 16) {
-      const angle = (fallback / 16) * Math.PI * 2;
-      const r = hw * 0.45;
-      const px = Math.cos(angle) * r;
-      const pz = Math.sin(angle) * r * 0.70;
-      if (Math.sqrt(px * px + pz * pz) >= minR && this._isWithinHeartCurve(px, pz, hw * 0.95)) {
-        positions.push({ x: px, z: pz });
-      }
-      fallback++;
-    }
-    return positions.slice(0, count);
+    // Pathological fallback: if text band consumed all points, use full perimeter
+    const src = pool.length >= count ? pool
+      : Array.from({ length: NUM }, (_, i) => heartPoint((i / NUM) * Math.PI * 2));
+
+    // Pick `count` evenly-spaced points from the valid pool
+    const step = src.length / count;
+    return Array.from({ length: count }, (_, i) =>
+      src[Math.floor(i * step + step * 0.5) % src.length]
+    );
   }
 
   /**
