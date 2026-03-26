@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customize Your Cake - ARCake</title>
+  <meta name="theme-color" content="#E91E8C" />
+  <meta name="description" content="Design and preview custom cakes in 3D with AR" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ARCake" />
+  <link rel="icon" href="../favicon.ico" sizes="48x48" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <script type="module" crossorigin src="../assets/main-Btmnq64y.js"></script>
+  <link rel="stylesheet" crossorigin href="../assets/main-D6DOiFD_.css">
+  <link rel="stylesheet" crossorigin href="../assets/customize-CKpE7MrR.css">
+<link rel="manifest" href="./manifest.webmanifest"></head>
+<body>
+  <!-- Loading Spinner -->
+  <div class="spinner-overlay" id="loading">
+    <div class="spinner"></div>
+    <span class="spinner-text">Loading 3D Cake...</span>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="../index.html" class="navbar-brand">AR<span>Cake</span></a>
+      <button class="navbar-toggle" id="navToggle" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="navbar-nav" id="navMenu">
+        <a href="../index.html">Home</a>
+        <a href="./customize.html" class="active">Customize</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Customizer Layout -->
+  <main class="customizer-layout">
+    <!-- 3D Canvas Side -->
+    <div class="canvas-panel">
+      <div class="canvas-wrap">
+        <canvas id="cakeCanvas"></canvas>
+      </div>
+      <div class="canvas-controls">
+        <button class="btn btn-primary btn-small" id="btnScreenshot" title="Take Screenshot">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Screenshot
+        </button>
+        <button class="btn btn-secondary btn-small" id="btnReset" title="Reset Cake">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15A9 9 0 1 1 21 12"/></svg>
+          Reset
+        </button>
+        <button class="btn btn-secondary btn-small" id="ar-preview-btn" title="AR Preview">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+          Preview in my space
+        </button>
+      </div>
+      <p class="canvas-hint">Drag to rotate · Scroll to zoom</p>
+    </div>
+
+    <!-- Customization Panel -->
+    <div class="customize-panel">
+      <h2 class="panel-title">Customize Your Cake</h2>
+
+      <!-- Section 1: Cake Shape -->
+      <details class="panel-section">
+        <summary class="section-header">
+          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span class="section-header-text">Cake Shape</span>
+          <svg class="section-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="section-body">
+          <div class="option-group shape-options" data-option="shape">
+            <button class="option-btn" data-value="round" title="Round Cake">
+              <svg class="option-icon-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+              <span class="option-label">Round</span>
+            </button>
+            <button class="option-btn" data-value="square" title="Square Cake">
+              <svg class="option-icon-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+              <span class="option-label">Square</span>
+            </button>
+            <button class="option-btn" data-value="heart" title="Heart Cake">
+              <svg class="option-icon-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              <span class="option-label">Heart</span>
+            </button>
+            <button class="option-btn" data-value="layered" title="Layered Cake">
+              <svg class="option-icon-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+              <span class="option-label">Layered</span>
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Section 2: Cake Size -->
+      <details class="panel-section">
+        <summary class="section-header">
+          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          <span class="section-header-text">Cake Size</span>
+          <svg class="section-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="section-body">
+          <div class="option-group size-options" data-option="size">
+            <button class="option-btn" data-value="small" title="Small">
+              <span class="option-label">Small</span>
+            </button>
+            <button class="option-btn" data-value="medium" title="Medium">
+              <span class="option-label">Medium</span>
+            </button>
+            <button class="option-btn" data-value="large" title="Large">
+              <span class="option-label">Large</span>
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Section 3: Cake Flavor -->
+      <details class="panel-section">
+        <summary class="section-header">
+          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+          <span class="section-header-text">Cake Flavor</span>
+          <svg class="section-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="section-body">
+          <div class="option-group flavor-options" data-option="flavor">
+            <button class="option-btn flavor-swatch" data-value="chocolate" title="Chocolate">
+              <span class="swatch" style="background:#5D4037;"></span>
+              <span class="option-label">Chocolate</span>
+            </button>
+            <button class="option-btn flavor-swatch" data-value="vanilla" title="Vanilla">
+              <span class="swatch" style="background:#FFF8E1;"></span>
+              <span class="option-label">Vanilla</span>
+            </button>
+            <button class="option-btn flavor-swatch" data-value="strawberry" title="Strawberry">
+              <span class="swatch" style="background:#F8BBD0;"></span>
+              <span class="option-label">Strawberry</span>
+            </button>
+            <button class="option-btn flavor-swatch" data-value="redvelvet" title="Red Velvet">
+              <span class="swatch" style="background:#C62828;"></span>
+              <span class="option-label">Red Velvet</span>
+            </button>
+            <button class="option-btn flavor-swatch" data-value="matcha" title="Matcha">
+              <span class="swatch" style="background:#8BC34A;"></span>
+              <span class="option-label">Matcha</span>
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Section 4: Frosting -->
+      <details class="panel-section">
+        <summary class="section-header">
+          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+          <span class="section-header-text">Frosting</span>
+          <svg class="section-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="section-body">
+          <label class="section-sublabel">Style</label>
+          <div class="option-group frosting-options" data-option="frostingStyle">
+            <button class="option-btn" data-value="smooth" title="Smooth">
+              <span class="option-label">Smooth</span>
+            </button>
+            <button class="option-btn" data-value="rosette" title="Rosette">
+              <span class="option-label">Rosette</span>
+            </button>
+            <button class="option-btn" data-value="drip" title="Drip">
+              <span class="option-label">Drip</span>
+            </button>
+          </div>
+          <div class="color-picker-group mt-2">
+            <label class="section-sublabel">Frosting Color</label>
+            <div class="preset-colors" data-option="frostingColor">
+              <button class="color-swatch active" data-value="#FFFFFF" style="background:#FFFFFF;" title="White"></button>
+              <button class="color-swatch" data-value="#F8BBD9" style="background:#F8BBD9;" title="Pink"></button>
+              <button class="color-swatch" data-value="#CE93D8" style="background:#CE93D8;" title="Purple"></button>
+              <button class="color-swatch" data-value="#90CAF9" style="background:#90CAF9;" title="Blue"></button>
+              <button class="color-swatch" data-value="#A5D6A7" style="background:#A5D6A7;" title="Green"></button>
+              <button class="color-swatch" data-value="#FFF59D" style="background:#FFF59D;" title="Yellow"></button>
+              <button class="color-swatch" data-value="#FFAB91" style="background:#FFAB91;" title="Peach"></button>
+              <button class="color-swatch" data-value="#F44336" style="background:#F44336;" title="Red"></button>
+              <button class="color-swatch" data-value="#5D4037" style="background:#5D4037;" title="Brown"></button>
+              <button class="color-swatch" data-value="#212121" style="background:#212121;" title="Black"></button>
+              <button class="color-swatch" data-value="#FFD700" style="background:#FFD700;" title="Gold"></button>
+              <button class="color-swatch" data-value="#E0E0E0" style="background:#E0E0E0;" title="Silver"></button>
+            </div>
+            <div class="custom-color-input">
+              <label for="customFrostingColor">Custom:</label>
+              <input type="color" id="customFrostingColor" value="#FFFFFF" />
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Section 5: Toppings -->
+      <details class="panel-section">
+        <summary class="section-header">
+          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><path d="M6.5 17a5.5 5.5 0 0 1 11 0"/><rect x="3" y="17" width="18" height="4" rx="2"/></svg>
+          <span class="section-header-text">Toppings</span>
+          <span class="topping-count"></span>
+          <svg class="section-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="section-body">
+          <div class="topping-groups">
+
+            <!-- Decorations: Sprinkles + Fruits + Extras combined -->
+            <div class="topping-group">
+              <div class="topping-group-header">
+                <span class="topping-group-label">Decorations</span>
+              </div>
+
+              <!-- Sprinkles -->
+              <div class="topping-subgroup">
+                <div class="topping-subgroup-header">
+                  <span class="topping-subgroup-label">Sprinkles</span>
+                  <button class="topping-clear-btn" data-category="sprinkles" type="button">Clear</button>
+                </div>
+                <div class="topping-options">
+                  <button class="topping-option-btn" data-category="sprinkles" data-value="rainbow" type="button">Rainbow</button>
+                  <button class="topping-option-btn" data-category="sprinkles" data-value="chocolate" type="button">Chocolate</button>
+                  <button class="topping-option-btn" data-category="sprinkles" data-value="star" type="button">Star</button>
+                </div>
+              </div>
+
+              <!-- Fruits -->
+              <div class="topping-subgroup">
+                <div class="topping-subgroup-header">
+                  <span class="topping-subgroup-label">Fruits</span>
+                  <button class="topping-clear-btn" data-category="fruits" type="button">Clear</button>
+                </div>
+                <div class="topping-options">
+                  <button class="topping-option-btn" data-category="fruits" data-value="blueberries" type="button">Blueberries</button>
+                  <button class="topping-option-btn" data-category="fruits" data-value="strawberries" type="button">Strawberries</button>
+                  <button class="topping-option-btn" data-category="fruits" data-value="cherries" type="button">Cherries</button>
+                  <button class="topping-option-btn" data-category="fruits" data-value="grapes" type="button">Grapes</button>
+                </div>
+                <div class="topping-qty-row" data-category="fruits">
+                  <span class="topping-qty-label">Quantity</span>
+                  <div class="topping-qty-controls">
+                    <button class="topping-qty-btn" data-category="fruits" data-action="dec" type="button">&#8722;</button>
+                    <input class="topping-qty-input" type="number" data-category="fruits" min="1" max="5" value="3">
+                    <button class="topping-qty-btn" data-category="fruits" data-action="inc" type="button">&#43;</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Extras -->
+              <div class="topping-subgroup">
+                <div class="topping-subgroup-header">
+                  <span class="topping-subgroup-label">Extras</span>
+                  <button class="topping-clear-btn" data-category="decorations" type="button">Clear</button>
+                </div>
+                <div class="topping-options">
+                  <button class="topping-option-btn" data-category="decorations" data-value="chocolate_pieces" type="button">Choc Shards</button>
+                  <button class="topping-option-btn" data-category="decorations" data-value="edible_flowers" type="button">Edible Flowers</button>
+                  <button class="topping-option-btn" data-category="decorations" data-value="custom_toppers" type="button">Star Toppers</button>
+                  <button class="topping-option-btn" data-category="decorations" data-value="macarons" type="button">Macarons</button>
+                  <button class="topping-option-btn" data-category="decorations" data-value="choc_drizzle" type="button">Choc Drizzle</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Candles -->
+            <div class="topping-group">
+              <div class="topping-group-header">
+                <span class="topping-group-label">Candles</span>
+                <button class="topping-clear-btn" data-category="candles" type="button">Clear</button>
+              </div>
+              <div class="topping-options">
+                <button class="topping-option-btn" data-category="candles" data-value="standard" type="button">Standard Candle</button>
+              </div>
+              <div class="topping-qty-row" data-category="candles">
+                <span class="topping-qty-label">Quantity</span>
+                <div class="topping-qty-controls">
+                  <button class="topping-qty-btn" data-category="candles" data-action="dec" type="button">&#8722;</button>
+                  <input class="topping-qty-input" type="number" data-category="candles" min="1" max="3" value="2">
+                  <button class="topping-qty-btn" data-category="candles" data-action="inc" type="button">&#43;</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </details>
+
+      <!-- Section 6: Custom Text -->
+      <details class="panel-section">
+        <summary class="section-header">
+          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9.5" y1="20" x2="14.5" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+          <span class="section-header-text">Custom Text</span>
+          <svg class="section-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="section-body">
+          <div class="text-input-group">
+            <input type="text" id="cakeText" placeholder="e.g. Happy Birthday!" maxlength="30" />
+          </div>
+          <div class="text-options mt-1">
+            <div class="font-select">
+              <label class="section-sublabel">Font Style</label>
+              <select id="textFont">
+                <option value="classic">Classic</option>
+                <option value="cursive">Cursive</option>
+                <option value="modern">Modern</option>
+              </select>
+            </div>
+            <div class="text-color-pick">
+              <label class="section-sublabel">Text Color</label>
+              <input type="color" id="textColor" value="#3D2B1F" />
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Section 7: Cake Board/Plate -->
+      <details class="panel-section">
+        <summary class="section-header">
+          <svg class="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="12" rx="10" ry="4"/></svg>
+          <span class="section-header-text">Cake Board</span>
+          <svg class="section-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="section-body">
+          <div class="preset-colors" data-option="boardColor">
+            <button class="color-swatch active" data-value="#8D6E63" style="background:#8D6E63;" title="Brown"></button>
+            <button class="color-swatch" data-value="#FFFFFF" style="background:#FFFFFF;" title="White"></button>
+            <button class="color-swatch" data-value="#FFD700" style="background:#FFD700;" title="Gold"></button>
+            <button class="color-swatch" data-value="#C0C0C0" style="background:#C0C0C0;" title="Silver"></button>
+            <button class="color-swatch" data-value="#212121" style="background:#212121;" title="Black"></button>
+            <button class="color-swatch" data-value="#F8BBD9" style="background:#F8BBD9;" title="Pink"></button>
+          </div>
+        </div>
+      </details>
+
+    </div>
+  </main>
+
+</body>
+</html>

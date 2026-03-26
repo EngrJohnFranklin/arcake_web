@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Background circle (transparent for favicon; used as base) -->
+
+  <!-- Bottom tier (base cake layer) -->
+  <ellipse cx="128" cy="195" rx="88" ry="18" fill="#f9e4f0"/>
+  <rect x="40" y="155" width="176" height="42" rx="6" fill="#ffffff"/>
+  <ellipse cx="128" cy="155" rx="88" ry="18" fill="#fce8f5"/>
+
+  <!-- Middle tier -->
+  <ellipse cx="128" cy="148" rx="68" ry="14" fill="#f5d6ed"/>
+  <rect x="60" y="114" width="136" height="36" rx="6" fill="#ffffff"/>
+  <ellipse cx="128" cy="114" rx="68" ry="14" fill="#f9e4f0"/>
+
+  <!-- Top tier -->
+  <ellipse cx="128" cy="108" rx="48" ry="11" fill="#f0c4e4"/>
+  <rect x="80" y="78" width="96" height="32" rx="6" fill="#ffffff"/>
+  <ellipse cx="128" cy="78" rx="48" ry="11" fill="#f5d6ed"/>
+
+  <!-- Hot-pink frosting drips on bottom tier -->
+  <path d="M55 155 Q52 167 56 172 Q60 177 63 170 Q65 163 68 155Z" fill="#E91E8C"/>
+  <path d="M80 157 Q77 172 82 176 Q87 180 90 172 Q92 164 95 157Z" fill="#E91E8C"/>
+  <path d="M155 157 Q152 172 157 176 Q162 180 165 172 Q167 164 170 157Z" fill="#E91E8C"/>
+  <path d="M185 155 Q182 167 186 172 Q190 177 193 170 Q195 163 198 155Z" fill="#E91E8C"/>
+
+  <!-- Hot-pink frosting drips on middle tier -->
+  <path d="M72 114 Q69 124 73 129 Q77 133 80 127 Q82 120 85 114Z" fill="#E91E8C"/>
+  <path d="M103 116 Q100 128 105 132 Q110 136 113 129 Q115 121 118 116Z" fill="#E91E8C"/>
+  <path d="M155 116 Q152 128 157 132 Q162 136 165 129 Q167 121 170 116Z" fill="#E91E8C"/>
+
+  <!-- Hot-pink frosting drips on top tier -->
+  <path d="M93 78 Q90 87 94 91 Q98 95 101 89 Q103 82 106 78Z" fill="#E91E8C"/>
+  <path d="M145 78 Q142 87 146 91 Q150 95 153 89 Q155 82 158 78Z" fill="#E91E8C"/>
+
+  <!-- Frosting top cap on top tier -->
+  <ellipse cx="128" cy="68" rx="48" ry="11" fill="#E91E8C"/>
+  <!-- Swirl dome -->
+  <path d="M128 68 Q145 55 140 40 Q135 28 128 25 Q121 28 116 40 Q111 55 128 68Z" fill="#E91E8C"/>
+  <!-- Highlight on swirl -->
+  <ellipse cx="122" cy="40" rx="5" ry="9" fill="#f47ec0" opacity="0.5"/>
+
+  <!-- Candle -->
+  <rect x="124" y="15" width="8" height="16" rx="2" fill="#ffd700"/>
+  <!-- Flame -->
+  <ellipse cx="128" cy="12" rx="4" ry="6" fill="#ff6b00"/>
+  <ellipse cx="128" cy="13" rx="2.5" ry="4" fill="#ffdd00"/>
+
+  <!-- Decorative dots on bottom tier -->
+  <circle cx="110" cy="175" r="4" fill="#E91E8C"/>
+  <circle cx="128" cy="178" r="4" fill="#E91E8C"/>
+  <circle cx="146" cy="175" r="4" fill="#E91E8C"/>
+</svg>

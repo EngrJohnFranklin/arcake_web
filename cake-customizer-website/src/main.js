@@ -22,12 +22,26 @@ registerSW({
 (function initOfflineBanner() {
   const banner = document.createElement('div');
   banner.id = 'arcake-offline-banner';
-  banner.className = 'arcake-offline-banner';
+  Object.assign(banner.style, {
+    display: 'none',
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '100%',
+    height: '36px',
+    lineHeight: '36px',
+    background: '#E91E8C',
+    color: '#ffffff',
+    fontSize: '13px',
+    textAlign: 'center',
+    zIndex: '99999',
+    boxSizing: 'border-box',
+  });
   banner.textContent = '📵  You\'re offline — all features still work from cache';
   document.body.appendChild(banner);
 
-  function showBanner() { banner.classList.add('visible'); }
-  function hideBanner() { banner.classList.remove('visible'); }
+  function showBanner() { banner.style.display = 'block'; }
+  function hideBanner() { banner.style.display = 'none'; }
 
   if (!navigator.onLine) showBanner();
   window.addEventListener('offline', showBanner);
@@ -55,18 +69,50 @@ registerSW({
   function showInstallBanner() {
     const banner = document.createElement('div');
     banner.id = 'arcake-install-banner';
-    banner.className = 'arcake-install-banner';
+    Object.assign(banner.style, {
+      position: 'fixed',
+      bottom: '0',
+      left: '0',
+      width: '100%',
+      background: 'rgba(26, 26, 46, 0.96)',
+      color: '#ffffff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '12px',
+      padding: '12px 20px',
+      zIndex: '9998',
+      boxSizing: 'border-box',
+      fontSize: '14px',
+    });
 
     const label = document.createElement('span');
     label.textContent = 'Install ARCake for the full experience';
 
     const installBtn = document.createElement('button');
     installBtn.textContent = 'Install';
-    installBtn.className = 'arcake-install-banner__btn';
+    Object.assign(installBtn.style, {
+      background: '#E91E8C',
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '6px',
+      padding: '8px 18px',
+      fontSize: '14px',
+      cursor: 'pointer',
+      fontWeight: '600',
+    });
 
     const closeBtn = document.createElement('button');
-    closeBtn.textContent = '\u2715';
-    closeBtn.className = 'arcake-install-banner__close';
+    closeBtn.textContent = '✕';
+    Object.assign(closeBtn.style, {
+      background: 'transparent',
+      color: '#ffffff',
+      border: 'none',
+      fontSize: '18px',
+      cursor: 'pointer',
+      lineHeight: '1',
+      padding: '0 4px',
+    });
 
     banner.appendChild(label);
     banner.appendChild(installBtn);
@@ -96,6 +142,9 @@ registerSW({
  * Detect which page we're on and initialize accordingly
  */
 async function init() {
+  console.log('[ARCake] Initializing...');
+
+  // Common UI (navbar, scroll, spinner)
   initCommonUI();
 
   const path = window.location.pathname;
@@ -111,6 +160,7 @@ async function init() {
  * Initialize the home page with hero 3D preview
  */
 async function initHomePage() {
+  console.log('[ARCake] Home page');
 
   // Intercept "Start Customizing" — show scan choice modal first
   const startBtn = document.getElementById('start-btn');
@@ -132,6 +182,7 @@ async function initHomePage() {
   try {
     const { createHeroPreview } = await import('./cake.js');
     createHeroPreview(canvas);
+    console.log('[ARCake] Hero preview loaded');
   } catch (err) {
     console.error('[ARCake] Error loading hero preview:', err);
   }
@@ -141,6 +192,7 @@ async function initHomePage() {
  * Initialize the customizer page
  */
 async function initCustomizePage() {
+  console.log('[ARCake] Customizer page');
   const canvas = document.getElementById('cakeCanvas');
   if (!canvas) return;
 
@@ -160,6 +212,7 @@ async function initCustomizePage() {
     window.customizationState = custState;
     window.cakeScene = cakeScene;
     initCustomizerUI(custState, cakeScene);
+    console.log('[ARCake] Customizer initialized');
   } catch (err) {
     console.error('[ARCake] Error initializing customizer:', err);
   }
