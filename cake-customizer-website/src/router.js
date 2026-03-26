@@ -1,20 +1,10 @@
 /**
  * @fileoverview Simple router utility.
- * Provides helper functions for page navigation.
- * Uses standard page-based routing (no SPA hash routing needed
- * since Vite handles multi-page apps natively).
+ * Provides helper functions for page detection.
  */
 
 /**
- * Navigate to a page
- * @param {string} page - Relative URL path
- */
-export function navigateTo(page) {
-  window.location.href = page;
-}
-
-/**
- * Get the current page name from the URL path
+ * Get the current page name from the URL path.
  * @returns {string} 'home' | 'customize'
  */
 export function getCurrentPage() {
