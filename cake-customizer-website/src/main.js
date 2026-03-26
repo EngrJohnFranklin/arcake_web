@@ -50,92 +50,79 @@ registerSW({
 
 // ─── PWA: Install prompt banner ───────────────────────────────────────────────
 (function initInstallBanner() {
-  // Don't show if already running as standalone
+  // Don't show if already running as standalone (already installed)
   if (window.matchMedia('(display-mode: standalone)').matches) return;
+  if (navigator.standalone === true) return; // iOS standalone check
 
+  // Respect user dismissal within the last 7 days
+  const dismissed = localStorage.getItem('arcake_install_dismissed');
+  if (dismissed && Date.now() - Number(dismissed) < 7 * 24 * 60 * 60 * 1000) return;
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+  function buildBanner(labelText, btnText, onBtnClick) {
+    const banner = document.createElement('div');
+    banner.id = 'arcake-install-banner';
+    banner.className = 'arcake-install-banner';
+
+    const label = document.createElement('span');
+    label.textContent = labelText;
+
+    const btn = document.createElement('button');
+    btn.textContent = btnText;
+    btn.className = 'arcake-install-banner__btn';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.className = 'arcake-install-banner__close';
+    closeBtn.setAttribute('aria-label', 'Dismiss install prompt');
+
+    banner.appendChild(label);
+    banner.appendChild(btn);
+    banner.appendChild(closeBtn);
+    document.body.appendChild(banner);
+
+    btn.addEventListener('click', onBtnClick);
+    closeBtn.addEventListener('click', () => {
+      localStorage.setItem('arcake_install_dismissed', String(Date.now()));
+      banner.remove();
+    });
+
+    return banner;
+  }
+
+  if (isIOS) {
+    // iOS Safari doesn't support beforeinstallprompt — show manual instructions
+    buildBanner(
+      'Install ARCake: tap Share then "Add to Home Screen"',
+      'Got it',
+      () => {
+        localStorage.setItem('arcake_install_dismissed', String(Date.now()));
+        document.getElementById('arcake-install-banner')?.remove();
+      }
+    );
+    return;
+  }
+
+  // Android / Desktop Chrome: wait for the native install prompt
   let deferredPrompt = null;
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
-
-    // Respect user dismissal within the last 7 days
-    const dismissed = localStorage.getItem('arcake_install_dismissed');
-    if (dismissed && Date.now() - Number(dismissed) < 7 * 24 * 60 * 60 * 1000) return;
-
     deferredPrompt = e;
-    showInstallBanner();
-  });
 
-  function showInstallBanner() {
-    const banner = document.createElement('div');
-    banner.id = 'arcake-install-banner';
-    Object.assign(banner.style, {
-      position: 'fixed',
-      bottom: '0',
-      left: '0',
-      width: '100%',
-      background: 'rgba(26, 26, 46, 0.96)',
-      color: '#ffffff',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '12px',
-      padding: '12px 20px',
-      zIndex: '9998',
-      boxSizing: 'border-box',
-      fontSize: '14px',
-    });
-
-    const label = document.createElement('span');
-    label.textContent = 'Install ARCake for the full experience';
-
-    const installBtn = document.createElement('button');
-    installBtn.textContent = 'Install';
-    Object.assign(installBtn.style, {
-      background: '#E91E8C',
-      color: '#ffffff',
-      border: 'none',
-      borderRadius: '6px',
-      padding: '8px 18px',
-      fontSize: '14px',
-      cursor: 'pointer',
-      fontWeight: '600',
-    });
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕';
-    Object.assign(closeBtn.style, {
-      background: 'transparent',
-      color: '#ffffff',
-      border: 'none',
-      fontSize: '18px',
-      cursor: 'pointer',
-      lineHeight: '1',
-      padding: '0 4px',
-    });
-
-    banner.appendChild(label);
-    banner.appendChild(installBtn);
-    banner.appendChild(closeBtn);
-    document.body.appendChild(banner);
-
-    installBtn.addEventListener('click', async () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        banner.style.display = 'none';
-        banner.remove();
+    const banner = buildBanner(
+      'Install ARCake for the full experience',
+      'Install',
+      async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') banner.remove();
+        deferredPrompt = null;
       }
-      deferredPrompt = null;
-    });
-
-    closeBtn.addEventListener('click', () => {
-      localStorage.setItem('arcake_install_dismissed', String(Date.now()));
-      banner.style.display = 'none';
-      banner.remove();
-    });
-  }
+    );
+  });
 }());
 
 /**

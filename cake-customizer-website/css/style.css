@@ -437,3 +437,60 @@ ul { list-style: none; }
     border-bottom: 1px solid var(--gray-light);
   }
 }
+
+/* -- PWA Banners ------------------------------------------------------------ */
+.arcake-offline-banner {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 36px;
+  line-height: 36px;
+  background: #E91E8C;
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+  z-index: 99999;
+  box-sizing: border-box;
+}
+.arcake-offline-banner.visible {
+  display: block;
+}
+
+.arcake-install-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(26, 26, 46, 0.96);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 20px;
+  z-index: 9998;
+  box-sizing: border-box;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+.arcake-install-banner__btn {
+  background: #E91E8C;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.arcake-install-banner__close {
+  background: transparent;
+  color: #fff;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
