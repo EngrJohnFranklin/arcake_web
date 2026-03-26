@@ -1,6 +1,7 @@
 {
   "private": true,
   "scripts": {
+    "postinstall": "npm install --prefix cake-customizer-website",
     "dev": "npm run dev --prefix cake-customizer-website",
     "build": "npm run build --prefix cake-customizer-website",
     "preview": "npm run preview --prefix cake-customizer-website"
