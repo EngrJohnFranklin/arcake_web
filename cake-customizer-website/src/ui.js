@@ -356,23 +356,6 @@ function _bindARPreviewButton(custState, cakeScene) {
  * @param {import('./cake.js').CakeScene} cakeScene
  */
 function _bindActionButtons(custState, cakeScene) {
-  const btnSave = document.getElementById('btnSave');
-  if (btnSave) {
-    btnSave.addEventListener('click', () => {
-      try {
-        const state = custState.getState();
-        const screenshot = cakeScene.takeScreenshot();
-        const designs = JSON.parse(localStorage.getItem('arcake_designs') || '[]');
-        designs.push({ id: Date.now(), date: new Date().toISOString(), state, screenshot });
-        localStorage.setItem('arcake_designs', JSON.stringify(designs));
-        showToast('Design Saved!', 'success');
-      } catch (err) {
-        console.error('[ARCake] Save error:', err);
-        showToast('Error saving design', 'error');
-      }
-    });
-  }
-
   const btnScreenshot = document.getElementById('btnScreenshot');
   if (btnScreenshot) {
     btnScreenshot.addEventListener('click', () => {

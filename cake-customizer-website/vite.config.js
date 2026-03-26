@@ -10,9 +10,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
-        customize: resolve(__dirname, 'pages/customize.html')
-      }
+        main:      resolve(__dirname, 'index.html'),
+        customize: resolve(__dirname, 'pages/customize.html'),
+      },
     }
   },
   server: {

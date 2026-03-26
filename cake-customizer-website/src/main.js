@@ -208,18 +208,6 @@ async function initCustomizePage() {
       custState.set('shape', urlShape);
     }
 
-    // Check for loaded design from gallery
-    const loadedDesign = sessionStorage.getItem('arcake_loadDesign');
-    if (loadedDesign) {
-      try {
-        const parsed = JSON.parse(loadedDesign);
-        custState.loadState(parsed);
-        sessionStorage.removeItem('arcake_loadDesign');
-      } catch (e) {
-        console.warn('[ARCake] Could not load saved design:', e);
-      }
-    }
-
     const cakeScene = new CakeScene(canvas);
     window.customizationState = custState;
     window.cakeScene = cakeScene;
