@@ -2,12 +2,24 @@
  * CakeScanner.js
  *
  * Uses the browser MediaDevices API to open a camera feed,
- * runs a lightweight Sobel-edge + shape-classification algorithm
- * on each captured frame, and calls onDetected(shape) once a shape
- * is confirmed across 3 consecutive matching frames.
+ * runs a lightweight contour-tracing shape classifier on each
+ * captured frame, and calls onDetected(shape) once a shape is
+ * confirmed across multiple matching frames.
  *
- * Zero external dependencies — vanilla JS only.
+ * Zero external dependencies — vanilla JS + Canvas API only.
  */
+
+import ShapeDetector from './shapeDetector.js';
+
+/** Map ShapeDetector names → CakeScanner names */
+const SHAPE_MAP = {
+  circle:    'round',
+  square:    'square',
+  rectangle: 'square',
+  triangle:  null,
+  heart:     'heart',
+  unknown:   null,
+};
 
 export class CakeScanner {
   /**
@@ -27,6 +39,12 @@ export class CakeScanner {
     this._confirmed = false;
     this.REQUIRED_HITS = 3;
 
+    // Rolling vote buffer — confirms when VOTE_THRESHOLD out of the
+    // last VOTE_WINDOW non-null detections agree on the same shape.
+    this._voteBuffer = [];
+    this.VOTE_WINDOW = 5;
+    this.VOTE_THRESHOLD = 4;
+
     // Timer handles
     this._intervalId = null;
     this._tipTimeoutId = null;
@@ -41,6 +59,9 @@ export class CakeScanner {
     this._ctx = null;
     this._finder = null;
     this._statusLabel = null;
+
+    // Shape detection engine (pre-allocated typed arrays)
+    this._detector = new ShapeDetector();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -206,183 +227,22 @@ export class CakeScanner {
   _scanFrame() {
     if (this._confirmed || this._video.readyState < 2) return;
 
-    const W = 320;
-    const H = 240;
+    // Higher resolution for better edge detail (still fast at 120k pixels)
+    const W = 400;
+    const H = 300;
 
     this._canvas.width = W;
     this._canvas.height = H;
     this._ctx.drawImage(this._video, 0, 0, W, H);
 
-    const shape = this._detectShape(this._ctx, W, H);
-    this._handleDetection(shape);
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // SHAPE DETECTION ALGORITHM
-  // ─────────────────────────────────────────────────────────────
-
-  /**
-   * Analyses a canvas 2D context and classifies the dominant cake shape.
-   *
-   * Pipeline:
-   *   A) Grayscale conversion
-   *   B) Sobel edge detection (adaptive threshold)
-   *   C) Bounding-box extraction
-   *   D) Straight-line ratio via horizontal/vertical edge scan
-   *   E) Rule-based classification (layered → square → heart → round)
-   *
-   * Key fix: square detection now uses the ratio of straight (axis-aligned)
-   * edge pixels to total edge pixels instead of corner-proximity counts.
-   * Straight edges dominate in square/rectangular cakes; curved edges
-   * dominate in round ones. This is far more reliable with real camera input.
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {number} w - Canvas width in pixels
-   * @param {number} h - Canvas height in pixels
-   * @returns {'round'|'square'|'heart'|'layered'|null}
-   */
-  _detectShape(ctx, w, h) {
-    // ── STEP A: Grayscale ──────────────────────────────────────
-    const imageData = ctx.getImageData(0, 0, w, h);
-    const data = imageData.data;
-    const gray = new Uint8Array(w * h);
-
-    for (let i = 0; i < w * h; i++) {
-      const base = i * 4;
-      gray[i] =
-        0.299 * data[base] + 0.587 * data[base + 1] + 0.114 * data[base + 2];
+    try {
+      const result = this._detector.detect(this._canvas);
+      const shape  = SHAPE_MAP[result.shape] ?? null;
+      this._handleDetection(shape);
+    } catch (err) {
+      console.warn('[CakeScanner] detect() error:', err);
+      this._handleDetection(null);
     }
-
-    // ── STEP B: Sobel edge detection with adaptive threshold ───
-    // Compute gradient magnitudes first so we can pick a percentile threshold.
-    const mag = new Float32Array(w * h);
-    let maxMag = 0;
-
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const tl = gray[(y - 1) * w + (x - 1)];
-        const tm = gray[(y - 1) * w + x];
-        const tr = gray[(y - 1) * w + (x + 1)];
-        const ml = gray[y * w + (x - 1)];
-        const mr = gray[y * w + (x + 1)];
-        const bl = gray[(y + 1) * w + (x - 1)];
-        const bm = gray[(y + 1) * w + x];
-        const br = gray[(y + 1) * w + (x + 1)];
-
-        const gx = -tl + tr - 2 * ml + 2 * mr - bl + br;
-        const gy = -tl - 2 * tm - tr + bl + 2 * bm + br;
-        const m = Math.sqrt(gx * gx + gy * gy);
-        mag[y * w + x] = m;
-        if (m > maxMag) maxMag = m;
-
-        // Also store gradient direction (0=H, 1=V, 2=diagonal)
-        // We'll use it in step D below — stash as a property on mag lazily.
-      }
-    }
-
-    // Adaptive threshold: 20 % of peak magnitude (min 20, max 80).
-    const EDGE_THRESHOLD = Math.min(80, Math.max(20, maxMag * 0.20));
-
-    const edges = new Uint8Array(w * h);
-    // gx/gy stored separately for the straight-line test
-    const gxArr = new Int16Array(w * h);
-    const gyArr = new Int16Array(w * h);
-
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        if (mag[y * w + x] > EDGE_THRESHOLD) {
-          edges[y * w + x] = 255;
-
-          const tl = gray[(y - 1) * w + (x - 1)];
-          const tr = gray[(y - 1) * w + (x + 1)];
-          const ml = gray[y * w + (x - 1)];
-          const mr = gray[y * w + (x + 1)];
-          const bl = gray[(y + 1) * w + (x - 1)];
-          const bm = gray[(y + 1) * w + x];
-          const tm = gray[(y - 1) * w + x];
-          const br = gray[(y + 1) * w + (x + 1)];
-          gxArr[y * w + x] = -tl + tr - 2 * ml + 2 * mr - bl + br;
-          gyArr[y * w + x] = -tl - 2 * tm - tr + bl + 2 * bm + br;
-        }
-      }
-    }
-
-    // ── STEP C: Bounding box & edge count ─────────────────────
-    let minX = w, maxX = 0, minY = h, maxY = 0, edgeCount = 0;
-
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (edges[y * w + x] === 255) {
-          edgeCount++;
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
-
-    // Not enough edge signal → nothing detected
-    if (edgeCount < 200) return null;
-
-    const bboxW = maxX - minX;
-    const bboxH = maxY - minY;
-    if (bboxW < 50 || bboxH < 50) return null;
-
-    const aspectRatio = bboxW / bboxH;
-
-    // ── STEP D: Straight-edge ratio ────────────────────────────
-    // An edge pixel is "straight" (horizontal or vertical) when its gradient
-    // direction is strongly axis-aligned: |gx| >> |gy|  (vertical boundary)
-    // or |gy| >> |gx|  (horizontal boundary).
-    // A round cake produces mostly diagonal/oblique gradients around the
-    // circumference; a square cake produces long runs of purely H or V edges
-    // along its flat sides.
-    let straightEdges = 0;
-
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (edges[y * w + x] !== 255) continue;
-        const ax = Math.abs(gxArr[y * w + x]);
-        const ay = Math.abs(gyArr[y * w + x]);
-        // "Straight" = one axis at least 2.5× stronger than the other
-        if (ax > ay * 2.5 || ay > ax * 2.5) straightEdges++;
-      }
-    }
-
-    const straightRatio = straightEdges / edgeCount;
-
-    // ── STEP E: Classification ─────────────────────────────────
-
-    // Rule 1 — LAYERED: significantly taller than wide (side-on view)
-    if (bboxH > bboxW * 1.4) return 'layered';
-
-    // Rule 2 — SQUARE: near-square aspect AND high straight-edge ratio.
-    // Thresholds tuned for real-world overhead/angled cake photos.
-    // straightRatio > 0.42 means most edges run H or V — typical of squares.
-    if (aspectRatio >= 0.75 && aspectRatio <= 1.35 && straightRatio > 0.42) {
-      return 'square';
-    }
-
-    // Rule 3 — HEART: near-square aspect + top-centre cleft depression
-    if (aspectRatio >= 0.75 && aspectRatio <= 1.4) {
-      const topBand = Math.max(4, Math.floor(bboxH * 0.20));
-      const midLeft  = Math.floor(minX + bboxW * 0.33);
-      const midRight = Math.floor(minX + bboxW * 0.67);
-
-      let cleftEdges = 0;
-      for (let y = minY; y < minY + topBand; y++) {
-        for (let x = midLeft; x <= midRight; x++) {
-          if (edges[y * w + x] === 255) cleftEdges++;
-        }
-      }
-
-      const area = topBand * (midRight - midLeft + 1);
-      if (area > 0 && cleftEdges / area < 0.035) return 'heart';
-    }
-
-    // Rule 4 — ROUND (default for anything not caught above)
-    return 'round';
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -411,6 +271,7 @@ export class CakeScanner {
       return;
     }
 
+    // Fast path — consecutive identical detections
     if (shape === this._lastShape) {
       this._consecutiveHits++;
     } else {
@@ -418,15 +279,37 @@ export class CakeScanner {
       this._consecutiveHits = 1;
     }
 
+    // Rolling vote buffer (robust path — tolerates 1 outlier frame)
+    this._voteBuffer.push(shape);
+    if (this._voteBuffer.length > this.VOTE_WINDOW) this._voteBuffer.shift();
+
     this._statusLabel.textContent = `Scanning… looks like a ${names[shape]} cake`;
 
+    // Confirm via fast path (3 consecutive) OR vote path (4 / 5 agree)
+    let confirmed = false;
+    let confirmedShape = shape;
+
     if (this._consecutiveHits >= this.REQUIRED_HITS) {
+      confirmed = true;
+    } else if (this._voteBuffer.length >= this.VOTE_WINDOW) {
+      const counts = {};
+      for (const s of this._voteBuffer) counts[s] = (counts[s] || 0) + 1;
+      for (const [s, c] of Object.entries(counts)) {
+        if (c >= this.VOTE_THRESHOLD) {
+          confirmed = true;
+          confirmedShape = s;
+          break;
+        }
+      }
+    }
+
+    if (confirmed) {
       this._confirmed = true;
       clearInterval(this._intervalId);
       this._finder.style.borderColor = '#4CAF50';
-      this._statusLabel.textContent = `${names[shape]} cake detected!`;
+      this._statusLabel.textContent = `${names[confirmedShape]} cake detected!`;
 
-      setTimeout(() => this._showConfirmCard(shape), 450);
+      setTimeout(() => this._showConfirmCard(confirmedShape), 450);
     }
   }
 
@@ -574,6 +457,7 @@ export class CakeScanner {
       this._confirmed = false;
       this._lastShape = null;
       this._consecutiveHits = 0;
+      this._voteBuffer = [];
       this._finder.style.borderColor = 'rgba(255,255,255,0.75)';
       this._statusLabel.textContent = 'Point camera at your cake';
       this._intervalId = setInterval(() => this._scanFrame(), 600);

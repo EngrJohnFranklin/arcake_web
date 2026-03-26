@@ -3,7 +3,6 @@
  * Binds DOM events to customization state changes.
  */
 
-import { CakeScanner } from './CakeScanner.js';
 import { ARPreview } from './ARPreview.js';
 
 /**
@@ -17,7 +16,6 @@ export function initCustomizerUI(custState, cakeScene) {
   _bindToppings(custState, cakeScene);
   _bindTextInputs(custState, cakeScene);
   _bindActionButtons(custState, cakeScene);
-  _bindScanButton(custState, cakeScene);
   _bindARPreviewButton(custState, cakeScene);
   _setInitialActiveStates(custState);
 
@@ -331,11 +329,6 @@ function _bindTextInputs(custState, cakeScene) {
 }
 
 /**
- * Bind the "Scan Cake Shape" button to open CakeScanner.
- * @param {import('./customization.js').CustomizationState} custState
- * @param {import('./cake.js').CakeScene} cakeScene
- */
-/**
  * Bind the "Preview in my space" AR button.
  * Opens ARPreview with the current customization state.
  * @param {import('./customization.js').CustomizationState} custState
@@ -354,44 +347,6 @@ function _bindARPreviewButton(custState, cakeScene) {
       (_dataURL) => showToast('AR screenshot saved!', 'success'),
     );
     ar.open();
-  });
-}
-
-/**
- * Bind the "Scan Cake Shape" button to open CakeScanner.
- * @param {import('./customization.js').CustomizationState} custState
- * @param {import('./cake.js').CakeScene} cakeScene
- */
-function _bindScanButton(custState, cakeScene) {
-  const btn = document.getElementById('btnScanShape');
-  if (!btn) return;
-
-  btn.addEventListener('click', () => {
-    const scanner = new CakeScanner({
-      onDetected: (shape) => {
-        if (shape) {
-          // Pre-select the detected shape and trigger a live rebuild
-          custState.set('shape', shape);
-
-          // Sync the shape button active states in the UI
-          const group = document.querySelector('.option-group[data-option="shape"]');
-          if (group) {
-            group.querySelectorAll('.option-btn').forEach((b) => {
-              b.classList.toggle('active', b.dataset.value === shape);
-            });
-          }
-
-          try { cakeScene.buildCake(custState.getState()); } catch (err) { console.error('[ARCake]', err); }
-          showToast(`${shape.charAt(0).toUpperCase() + shape.slice(1)} shape detected!`, 'success');
-        }
-        // If shape is null the user chose "Select manually" — scanner already closed
-      },
-      onError: (message) => {
-        console.warn('[CakeScanner]', message);
-        showToast(message, 'error');
-      },
-    });
-    scanner.start();
   });
 }
 

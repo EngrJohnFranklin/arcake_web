@@ -24,7 +24,7 @@ const SIZE_SCALES = {
 
 /** Quantity limits mirrored from customization.js — avoids circular imports */
 const QTY_LIMITS_3D = {
-  fruits:  { min: 0, max: 5,  default: 3 },
+  fruits:  { min: 0, max: 8,  default: 3 },
   candles: { min: 1, max: 3,  default: 2 },
 };
 

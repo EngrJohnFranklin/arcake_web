@@ -1,0 +1,21 @@
+{
+  "hash": "1d60823d",
+  "configHash": "04eabfe7",
+  "lockfileHash": "e3b0c442",
+  "browserHash": "bee46ffe",
+  "optimized": {
+    "three": {
+      "src": "../../cake-customizer-website/node_modules/three/build/three.module.js",
+      "file": "three.js",
+      "fileHash": "89d81179",
+      "needsInterop": false
+    },
+    "three/examples/jsm/controls/OrbitControls.js": {
+      "src": "../../cake-customizer-website/node_modules/three/examples/jsm/controls/OrbitControls.js",
+      "file": "three_examples_jsm_controls_OrbitControls__js.js",
+      "fileHash": "1c9d56cc",
+      "needsInterop": false
+    }
+  },
+  "chunks": {}
+}
