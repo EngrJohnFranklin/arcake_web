@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   root: '.',
-  base: './',
+  base: '/',
   build: {
     outDir: 'dist',
     chunkSizeWarningLimit: 600,
@@ -73,8 +73,8 @@ export default defineConfig({
         background_color: '#1a1a2e',
         display: 'standalone',
         orientation: 'portrait-primary',
-        scope: './',
-        start_url: './',
+        scope: '/',
+        start_url: '/',
         categories: ['food', 'lifestyle', 'design'],
         icons: [
           { src: 'pwa-192x192.png',          sizes: '192x192', type: 'image/png', purpose: 'any' },
